@@ -81,14 +81,17 @@ src/
 │   ├── changes.ts        # OpenSpec changes
 │   ├── personas.ts       # VPC personas
 │   ├── config.ts         # Project config
-│   └── memory.ts         # Agent memory
+│   ├── memory.ts         # Agent memory
+│   ├── skills.ts         # Provider-agnostic SKILL.md skills
+│   └── provider-info.ts  # Provider detection info
 ├── tools/                # MCP tool handlers
 │   ├── doctor.ts         # Health check tool
 │   ├── score-feature.ts  # VPC scoring tool
 │   └── query-failures.ts # Failure analysis tool
 └── utils/
     ├── paths.ts          # Safe path resolution
-    └── validation.ts     # Input validation
+    ├── validation.ts     # Input validation
+    └── provider.ts       # AI provider detection (Claude/Codex)
 ```
 
 ## License

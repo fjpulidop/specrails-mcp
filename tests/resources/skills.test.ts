@@ -122,10 +122,7 @@ describe('registerSkillsResources', () => {
 
       expect(result.contents[0].text).toBe('# sr-implement\n\nImplement a feature.');
       expect(result.contents[0].mimeType).toBe('text/markdown');
-      expect(mockReadFile).toHaveBeenCalledWith(
-        expect.stringContaining('SKILL.md'),
-        'utf-8',
-      );
+      expect(mockReadFile).toHaveBeenCalledWith(expect.stringContaining('SKILL.md'), 'utf-8');
     });
 
     it('throws for skill names with path separators', async () => {
