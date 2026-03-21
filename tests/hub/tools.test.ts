@@ -70,7 +70,11 @@ vi.mock('../../src/hub/db.js', async () => {
   };
 });
 
-import { getProjects, getProject, registerHubGetProjectsTool } from '../../src/tools/hub-get-projects.js';
+import {
+  getProjects,
+  getProject,
+  registerHubGetProjectsTool,
+} from '../../src/tools/hub-get-projects.js';
 import { getJobs, getJobDetail, registerHubGetJobsTool } from '../../src/tools/hub-get-jobs.js';
 import { getAnalytics, registerHubGetAnalyticsTool } from '../../src/tools/hub-get-analytics.js';
 
@@ -305,10 +309,9 @@ describe('registerHubGetJobsTool', () => {
     const server = { tool: vi.fn() };
     registerHubGetJobsTool(server as never);
 
-    const handler = server.tool.mock.calls[1]?.[3] as (p: {
-      projectId: string;
-      jobId: string;
-    }) => { content: Array<{ type: string; text: string }> };
+    const handler = server.tool.mock.calls[1]?.[3] as (p: { projectId: string; jobId: string }) => {
+      content: Array<{ type: string; text: string }>;
+    };
 
     const result = handler({ projectId: 'proj-1', jobId: 'job-a' });
     const data = JSON.parse(result.content[0]?.text ?? '{}') as {

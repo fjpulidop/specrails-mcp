@@ -236,9 +236,9 @@ describe('registerHubProjectsResources', () => {
     registerHubProjectsResources(server as never);
 
     const cb = getCallback('hub-project');
-    expect(() =>
-      cb(new URL('specrails://hub/projects/unknown'), { projectId: 'unknown' }),
-    ).toThrow('Project not found');
+    expect(() => cb(new URL('specrails://hub/projects/unknown'), { projectId: 'unknown' })).toThrow(
+      'Project not found',
+    );
   });
 
   it('shows fallback when project db is unavailable', () => {

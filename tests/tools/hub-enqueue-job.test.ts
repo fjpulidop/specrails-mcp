@@ -47,7 +47,7 @@ beforeEach(() => {
   globalThis.fetch = mockFetch as typeof fetch;
   mockFetch.mockResolvedValue({
     ok: true,
-    json: async () => ({ id: 'job-xyz-123' }),
+    json: () => Promise.resolve({ id: 'job-xyz-123' }),
   } as Response);
 });
 
@@ -100,7 +100,7 @@ describe('enqueueJob', () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 422,
-      json: async () => ({ error: 'Invalid command format' }),
+      json: () => Promise.resolve({ error: 'Invalid command format' }),
     } as Response);
 
     await expect(enqueueJob({ projectId: 'proj-1', command: 'bad command!' })).rejects.toThrow(
@@ -112,7 +112,7 @@ describe('enqueueJob', () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 500,
-      json: async () => ({ message: 'Internal error' }),
+      json: () => Promise.resolve({ message: 'Internal error' }),
     } as Response);
 
     await expect(enqueueJob({ projectId: 'proj-1', command: 'implement' })).rejects.toThrow(
@@ -124,9 +124,7 @@ describe('enqueueJob', () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 503,
-      json: async () => {
-        throw new Error('invalid json');
-      },
+      json: () => Promise.reject(new Error('invalid json')),
     } as unknown as Response);
 
     await expect(enqueueJob({ projectId: 'proj-1', command: 'implement' })).rejects.toThrow(
@@ -137,7 +135,7 @@ describe('enqueueJob', () => {
   it('uses jobId from result.jobId when result.id is absent', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ jobId: 'alt-job-id' }),
+      json: () => Promise.resolve({ jobId: 'alt-job-id' }),
     } as Response);
 
     const result = await enqueueJob({ projectId: 'proj-1', command: 'implement' });
@@ -147,7 +145,7 @@ describe('enqueueJob', () => {
   it('returns null jobId when neither id nor jobId present in response', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({}),
+      json: () => Promise.resolve({}),
     } as Response);
 
     const result = await enqueueJob({ projectId: 'proj-1', command: 'implement' });
