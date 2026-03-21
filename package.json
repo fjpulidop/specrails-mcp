@@ -1,6 +1,6 @@
 {
   "name": "specrails-mcp",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "MCP server exposing specrails-core knowledge (specs, personas, memory, config) to MCP-compatible clients",
   "type": "module",
   "main": "dist/index.js",
