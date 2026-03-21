@@ -4,9 +4,9 @@ import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ListResourcesResult } from '@modelcontextprotocol/sdk/types.js';
 import { safeResolve } from '../utils/paths.js';
+import { detectProvider } from '../utils/provider.js';
 
 const PERSONA_EXTENSIONS = new Set(['.md', '.yaml', '.yml', '.json']);
-const PERSONAS_PATH = ['.claude', 'agents'] as const;
 
 function mimeTypeForExt(ext: string): string {
   if (ext === '.md') return 'text/markdown';
@@ -17,12 +17,14 @@ function mimeTypeForExt(ext: string): string {
 /**
  * Registers read-only MCP resources for VPC personas.
  * URI pattern: specrails://personas/{name}  (name includes file extension)
+ * Path: {configDir}/agents/{name}  (configDir resolved per-request based on CLI provider)
  */
 export function registerPersonasResources(server: McpServer, projectRoot: string): void {
-  const personasDir = safeResolve(projectRoot, ...PERSONAS_PATH);
-
   const template = new ResourceTemplate('specrails://personas/{name}', {
     list: async (): Promise<ListResourcesResult> => {
+      const { configDir } = await detectProvider(projectRoot);
+      const personasDir = safeResolve(projectRoot, configDir, 'agents');
+
       let files: string[];
       try {
         files = await readdir(personasDir);
@@ -52,7 +54,8 @@ export function registerPersonasResources(server: McpServer, projectRoot: string
       if (!name || /[/\\]/.test(name)) {
         throw new Error(`Invalid persona name: "${String(name)}"`);
       }
-      const filePath = safeResolve(projectRoot, ...PERSONAS_PATH, name);
+      const { configDir } = await detectProvider(projectRoot);
+      const filePath = safeResolve(projectRoot, configDir, 'agents', name);
       const content = await readFile(filePath, 'utf-8');
       return {
         contents: [

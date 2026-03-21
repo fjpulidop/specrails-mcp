@@ -4,6 +4,8 @@ import { registerChangesResources } from './resources/changes.js';
 import { registerConfigResources } from './resources/config.js';
 import { registerPersonasResources } from './resources/personas.js';
 import { registerMemoryResources } from './resources/memory.js';
+import { registerSkillsResources } from './resources/skills.js';
+import { registerProviderInfoResource } from './resources/provider-info.js';
 import { registerDoctorTool } from './tools/doctor.js';
 
 export const SERVER_NAME = 'specrails-mcp';
@@ -24,6 +26,8 @@ export function createServer(projectRoot: string): McpServer {
   registerConfigResources(server, projectRoot);
   registerPersonasResources(server, projectRoot);
   registerMemoryResources(server, projectRoot);
+  registerSkillsResources(server, projectRoot);
+  registerProviderInfoResource(server, projectRoot);
   registerDoctorTool(server, projectRoot);
 
   return server;

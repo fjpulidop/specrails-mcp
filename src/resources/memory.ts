@@ -4,9 +4,9 @@ import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ListResourcesResult } from '@modelcontextprotocol/sdk/types.js';
 import { safeResolve } from '../utils/paths.js';
+import { detectProvider } from '../utils/provider.js';
 
 const MEMORY_EXTENSIONS = new Set(['.md', '.yaml', '.yml', '.json', '.txt']);
-const MEMORY_PATH = ['.claude', 'agent-memory'] as const;
 
 function mimeTypeForExt(ext: string): string {
   if (ext === '.md') return 'text/markdown';
@@ -18,12 +18,14 @@ function mimeTypeForExt(ext: string): string {
 /**
  * Registers read-only MCP resources for agent memory files.
  * URI pattern: specrails://memory/{name}  (name includes file extension)
+ * Path: {configDir}/agent-memory/{name}  (configDir resolved per-request based on CLI provider)
  */
 export function registerMemoryResources(server: McpServer, projectRoot: string): void {
-  const memoryDir = safeResolve(projectRoot, ...MEMORY_PATH);
-
   const template = new ResourceTemplate('specrails://memory/{name}', {
     list: async (): Promise<ListResourcesResult> => {
+      const { configDir } = await detectProvider(projectRoot);
+      const memoryDir = safeResolve(projectRoot, configDir, 'agent-memory');
+
       let files: string[];
       try {
         files = await readdir(memoryDir);
@@ -53,7 +55,8 @@ export function registerMemoryResources(server: McpServer, projectRoot: string):
       if (!name || /[/\\]/.test(name)) {
         throw new Error(`Invalid memory name: "${String(name)}"`);
       }
-      const filePath = safeResolve(projectRoot, ...MEMORY_PATH, name);
+      const { configDir } = await detectProvider(projectRoot);
+      const filePath = safeResolve(projectRoot, configDir, 'agent-memory', name);
       const content = await readFile(filePath, 'utf-8');
       return {
         contents: [

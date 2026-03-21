@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readdir, readFile } from 'fs/promises';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readdir, readFile, access } from 'fs/promises';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerPersonasResources } from '../../src/resources/personas.js';
+import { registerSkillsResources } from '../../src/resources/skills.js';
 
 vi.mock('fs/promises');
 vi.mock('../../src/utils/provider.js', () => ({
@@ -10,6 +10,7 @@ vi.mock('../../src/utils/provider.js', () => ({
 
 const mockReaddir = vi.mocked(readdir);
 const mockReadFile = vi.mocked(readFile);
+const mockAccess = vi.mocked(access);
 
 const ROOT = '/project/root';
 
@@ -48,39 +49,58 @@ function createMockServer(): {
   };
 }
 
-describe('registerPersonasResources', () => {
+describe('registerSkillsResources', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env['SPECRAILS_CLI_PROVIDER'];
   });
 
-  it('registers a resource template named "persona"', () => {
+  afterEach(() => {
+    delete process.env['SPECRAILS_CLI_PROVIDER'];
+  });
+
+  it('registers a resource template named "skill"', () => {
     const { serverMock } = createMockServer();
-    registerPersonasResources(serverMock as never, ROOT);
+    registerSkillsResources(serverMock as never, ROOT);
     expect(serverMock.resource).toHaveBeenCalledOnce();
-    expect(serverMock.resource.mock.calls[0][0]).toBe('persona');
+    expect(serverMock.resource.mock.calls[0][0]).toBe('skill');
     expect(serverMock.resource.mock.calls[0][1]).toBeInstanceOf(ResourceTemplate);
   });
 
   describe('list callback', () => {
-    it('returns md and yaml persona files', async () => {
+    it('returns skill directories that contain SKILL.md', async () => {
       const { serverMock, getTemplate } = createMockServer();
-      mockReaddir.mockResolvedValue(['engineer.md', 'pm.yaml', 'notes.txt'] as never);
+      mockReaddir.mockResolvedValue(['sr-implement', 'sr-health-check', 'README.md'] as never);
+      mockAccess
+        .mockResolvedValueOnce(undefined) // sr-implement/SKILL.md exists
+        .mockResolvedValueOnce(undefined) // sr-health-check/SKILL.md exists
+        .mockRejectedValueOnce(new Error('ENOENT')); // README.md/SKILL.md missing
 
-      registerPersonasResources(serverMock as never, ROOT);
+      registerSkillsResources(serverMock as never, ROOT);
       const result = await getTemplate()!.listCallback!({} as never);
 
       expect(result.resources).toHaveLength(2);
-      expect(result.resources[0].uri).toBe('specrails://personas/engineer.md');
+      expect(result.resources[0].uri).toBe('specrails://skills/sr-implement');
       expect(result.resources[0].mimeType).toBe('text/markdown');
-      expect(result.resources[1].uri).toBe('specrails://personas/pm.yaml');
-      expect(result.resources[1].mimeType).toBe('text/yaml');
+      expect(result.resources[1].uri).toBe('specrails://skills/sr-health-check');
     });
 
-    it('returns empty list when directory does not exist', async () => {
+    it('returns empty list when skills directory does not exist', async () => {
       const { serverMock, getTemplate } = createMockServer();
       mockReaddir.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
 
-      registerPersonasResources(serverMock as never, ROOT);
+      registerSkillsResources(serverMock as never, ROOT);
+      const result = await getTemplate()!.listCallback!({} as never);
+
+      expect(result.resources).toHaveLength(0);
+    });
+
+    it('returns empty list when no directory has SKILL.md', async () => {
+      const { serverMock, getTemplate } = createMockServer();
+      mockReaddir.mockResolvedValue(['notes'] as never);
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      registerSkillsResources(serverMock as never, ROOT);
       const result = await getTemplate()!.listCallback!({} as never);
 
       expect(result.resources).toHaveLength(0);
@@ -88,31 +108,34 @@ describe('registerPersonasResources', () => {
   });
 
   describe('read callback', () => {
-    it('reads a persona file and returns its content', async () => {
+    it('reads SKILL.md and returns its content', async () => {
       const { serverMock, getReadCallback } = createMockServer();
-      mockReadFile.mockResolvedValue('# Engineer persona' as never);
+      mockReadFile.mockResolvedValue('# sr-implement\n\nImplement a feature.' as never);
 
-      registerPersonasResources(serverMock as never, ROOT);
+      registerSkillsResources(serverMock as never, ROOT);
       const cb = getReadCallback()!;
       const result = await cb(
-        new URL('specrails://personas/engineer.md'),
-        { name: 'engineer.md' },
+        new URL('specrails://skills/sr-implement'),
+        { name: 'sr-implement' },
         {},
       );
 
-      expect(result.contents[0].text).toBe('# Engineer persona');
+      expect(result.contents[0].text).toBe('# sr-implement\n\nImplement a feature.');
       expect(result.contents[0].mimeType).toBe('text/markdown');
-      expect(mockReadFile).toHaveBeenCalledWith(expect.stringContaining('engineer.md'), 'utf-8');
+      expect(mockReadFile).toHaveBeenCalledWith(
+        expect.stringContaining('SKILL.md'),
+        'utf-8',
+      );
     });
 
-    it('throws for names with path separators', async () => {
+    it('throws for skill names with path separators', async () => {
       const { serverMock, getReadCallback } = createMockServer();
-      registerPersonasResources(serverMock as never, ROOT);
+      registerSkillsResources(serverMock as never, ROOT);
       const cb = getReadCallback()!;
 
       await expect(
-        cb(new URL('specrails://personas/bad'), { name: '../etc/passwd' }, {}),
-      ).rejects.toThrow('Invalid persona name');
+        cb(new URL('specrails://skills/bad'), { name: '../etc/passwd' }, {}),
+      ).rejects.toThrow('Invalid skill name');
     });
   });
 });

@@ -4,9 +4,17 @@ import { registerDoctorTool } from '../../src/tools/doctor.js';
 import type { DoctorResult } from '../../src/tools/doctor.js';
 
 vi.mock('fs/promises');
+vi.mock('../../src/utils/provider.js', () => ({
+  detectProvider: vi.fn().mockResolvedValue({ provider: 'claude', configDir: '.claude' }),
+  instructionsFileName: vi.fn((p: string) => (p === 'codex' ? 'CODEX.md' : 'CLAUDE.md')),
+}));
+
+import { detectProvider, instructionsFileName } from '../../src/utils/provider.js';
 
 const mockAccess = vi.mocked(access);
 const mockReadFile = vi.mocked(readFile);
+const mockDetectProvider = vi.mocked(detectProvider);
+const mockInstructionsFileName = vi.mocked(instructionsFileName);
 
 const ROOT = '/project/root';
 
@@ -37,6 +45,10 @@ function createMockServer(): {
 describe('registerDoctorTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDetectProvider.mockResolvedValue({ provider: 'claude', configDir: '.claude' });
+    mockInstructionsFileName.mockImplementation((p: string) =>
+      p === 'codex' ? 'CODEX.md' : 'CLAUDE.md',
+    );
   });
 
   it('registers a tool named "doctor"', () => {
@@ -72,10 +84,79 @@ describe('registerDoctorTool', () => {
 
       expect(parsed.checks).toHaveLength(6);
     });
+
+    it('includes provider field in result', async () => {
+      const { serverMock, getCallback } = createMockServer();
+      mockAccess.mockResolvedValue(undefined);
+      mockReadFile.mockResolvedValue('content' as never);
+
+      registerDoctorTool(serverMock as never, ROOT);
+      const result = await getCallback()!({});
+      const parsed: DoctorResult = JSON.parse(result.content[0].text) as DoctorResult;
+
+      expect(parsed.provider).toBe('claude');
+    });
+  });
+
+  describe('provider-aware checks', () => {
+    it('checks .claude/ when provider is claude', async () => {
+      mockDetectProvider.mockResolvedValue({ provider: 'claude', configDir: '.claude' });
+      const { serverMock, getCallback } = createMockServer();
+      mockAccess.mockResolvedValue(undefined);
+      mockReadFile.mockResolvedValue('content' as never);
+
+      registerDoctorTool(serverMock as never, ROOT);
+      const result = await getCallback()!({});
+      const parsed: DoctorResult = JSON.parse(result.content[0].text) as DoctorResult;
+
+      expect(parsed.checks[0].name).toBe('.claude');
+    });
+
+    it('checks .codex/ when provider is codex', async () => {
+      mockDetectProvider.mockResolvedValue({ provider: 'codex', configDir: '.codex' });
+      const { serverMock, getCallback } = createMockServer();
+      mockAccess.mockResolvedValue(undefined);
+      mockReadFile.mockResolvedValue('content' as never);
+
+      registerDoctorTool(serverMock as never, ROOT);
+      const result = await getCallback()!({});
+      const parsed: DoctorResult = JSON.parse(result.content[0].text) as DoctorResult;
+
+      expect(parsed.checks[0].name).toBe('.codex');
+      expect(parsed.provider).toBe('codex');
+    });
+
+    it('checks CLAUDE.md for claude provider', async () => {
+      mockDetectProvider.mockResolvedValue({ provider: 'claude', configDir: '.claude' });
+      const { serverMock, getCallback } = createMockServer();
+      mockAccess.mockResolvedValue(undefined);
+      mockReadFile.mockResolvedValue('instructions' as never);
+
+      registerDoctorTool(serverMock as never, ROOT);
+      const result = await getCallback()!({});
+      const parsed: DoctorResult = JSON.parse(result.content[0].text) as DoctorResult;
+
+      const instrCheck = parsed.checks.find((c) => c.name === 'CLAUDE.md');
+      expect(instrCheck).toBeDefined();
+    });
+
+    it('checks CODEX.md for codex provider', async () => {
+      mockDetectProvider.mockResolvedValue({ provider: 'codex', configDir: '.codex' });
+      const { serverMock, getCallback } = createMockServer();
+      mockAccess.mockResolvedValue(undefined);
+      mockReadFile.mockResolvedValue('instructions' as never);
+
+      registerDoctorTool(serverMock as never, ROOT);
+      const result = await getCallback()!({});
+      const parsed: DoctorResult = JSON.parse(result.content[0].text) as DoctorResult;
+
+      const instrCheck = parsed.checks.find((c) => c.name === 'CODEX.md');
+      expect(instrCheck).toBeDefined();
+    });
   });
 
   describe('degraded installation', () => {
-    it('reports healthy=false and isError=true when a directory is missing', async () => {
+    it('reports healthy=false and isError=true when config dir is missing', async () => {
       const { serverMock, getCallback } = createMockServer();
       // Only .claude/ is missing
       mockAccess
@@ -90,7 +171,6 @@ describe('registerDoctorTool', () => {
       expect(parsed.healthy).toBe(false);
       expect(result.isError).toBe(true);
       expect(parsed.checks[0].pass).toBe(false);
-      expect(parsed.checks[0].name).toBe('.claude');
     });
 
     it('reports fail when config.yaml is empty', async () => {
@@ -109,7 +189,7 @@ describe('registerDoctorTool', () => {
       expect(configCheck?.message).toContain('empty');
     });
 
-    it('reports fail when CLAUDE.md is missing', async () => {
+    it('reports fail when instructions file is missing', async () => {
       const { serverMock, getCallback } = createMockServer();
       mockAccess.mockResolvedValue(undefined);
       mockReadFile
@@ -120,8 +200,8 @@ describe('registerDoctorTool', () => {
       const result = await getCallback()!({});
       const parsed: DoctorResult = JSON.parse(result.content[0].text) as DoctorResult;
 
-      const claudeCheck = parsed.checks.find((c) => c.name === 'CLAUDE.md');
-      expect(claudeCheck?.pass).toBe(false);
+      const instrCheck = parsed.checks.find((c) => c.name === 'CLAUDE.md');
+      expect(instrCheck?.pass).toBe(false);
     });
   });
 

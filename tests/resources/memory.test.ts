@@ -4,6 +4,9 @@ import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerMemoryResources } from '../../src/resources/memory.js';
 
 vi.mock('fs/promises');
+vi.mock('../../src/utils/provider.js', () => ({
+  detectProvider: vi.fn().mockResolvedValue({ provider: 'claude', configDir: '.claude' }),
+}));
 
 const mockReaddir = vi.mocked(readdir);
 const mockReadFile = vi.mocked(readFile);

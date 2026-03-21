@@ -2,6 +2,7 @@ import { access, readFile, constants } from 'fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { safeResolve } from '../utils/paths.js';
+import { detectProvider, instructionsFileName } from '../utils/provider.js';
 
 export interface CheckResult {
   name: string;
@@ -11,6 +12,7 @@ export interface CheckResult {
 
 export interface DoctorResult {
   healthy: boolean;
+  provider: string;
   checks: CheckResult[];
 }
 
@@ -42,23 +44,27 @@ async function checkFileReadable(root: string, ...parts: string[]): Promise<Chec
 /**
  * Registers the doctor health-check tool.
  * Returns a structured JSON report of required directories and config files.
+ * Checks are provider-aware: uses the detected CLI provider's configDir (.claude or .codex).
  */
 export function registerDoctorTool(server: McpServer, projectRoot: string): void {
   server.tool(
     'doctor',
     'Health check for the specrails installation. Verifies required directories and config files.',
     async (): Promise<CallToolResult> => {
+      const { provider, configDir } = await detectProvider(projectRoot);
+      const instrFile = instructionsFileName(provider);
+
       const checks = await Promise.all([
-        checkDirExists(projectRoot, '.claude'),
+        checkDirExists(projectRoot, configDir),
         checkDirExists(projectRoot, 'openspec'),
         checkDirExists(projectRoot, 'openspec', 'specs'),
         checkDirExists(projectRoot, 'openspec', 'changes'),
         checkFileReadable(projectRoot, 'openspec', 'config.yaml'),
-        checkFileReadable(projectRoot, 'CLAUDE.md'),
+        checkFileReadable(projectRoot, instrFile),
       ]);
 
       const healthy = checks.every((c) => c.pass);
-      const result: DoctorResult = { healthy, checks };
+      const result: DoctorResult = { healthy, provider, checks };
 
       return {
         content: [

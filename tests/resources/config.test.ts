@@ -3,8 +3,16 @@ import { readFile } from 'fs/promises';
 import { registerConfigResources } from '../../src/resources/config.js';
 
 vi.mock('fs/promises');
+vi.mock('../../src/utils/provider.js', () => ({
+  detectProvider: vi.fn().mockResolvedValue({ provider: 'claude', configDir: '.claude' }),
+  instructionsFileName: vi.fn((p: string) => (p === 'codex' ? 'CODEX.md' : 'CLAUDE.md')),
+}));
+
+import { detectProvider, instructionsFileName } from '../../src/utils/provider.js';
 
 const mockReadFile = vi.mocked(readFile);
+const mockDetectProvider = vi.mocked(detectProvider);
+const mockInstructionsFileName = vi.mocked(instructionsFileName);
 const ROOT = '/project/root';
 
 type StaticReadCallback = (
@@ -40,9 +48,13 @@ function createMockServer(): {
 describe('registerConfigResources', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDetectProvider.mockResolvedValue({ provider: 'claude', configDir: '.claude' });
+    mockInstructionsFileName.mockImplementation((p: string) =>
+      p === 'codex' ? 'CODEX.md' : 'CLAUDE.md',
+    );
   });
 
-  it('registers two static config resources', () => {
+  it('registers two config resources', () => {
     const { serverMock } = createMockServer();
     registerConfigResources(serverMock as never, ROOT);
     expect(serverMock.resource).toHaveBeenCalledTimes(2);
@@ -55,11 +67,11 @@ describe('registerConfigResources', () => {
     expect(uris).toContain('specrails://config/openspec');
   });
 
-  it('registers specrails://config/claude', () => {
+  it('registers specrails://config/instructions', () => {
     const { serverMock } = createMockServer();
     registerConfigResources(serverMock as never, ROOT);
     const uris = serverMock.resource.mock.calls.map((c) => c[1]);
-    expect(uris).toContain('specrails://config/claude');
+    expect(uris).toContain('specrails://config/instructions');
   });
 
   describe('openspec config read callback', () => {
@@ -87,18 +99,32 @@ describe('registerConfigResources', () => {
     });
   });
 
-  describe('claude md read callback', () => {
-    it('reads CLAUDE.md and returns markdown content', async () => {
+  describe('instructions read callback', () => {
+    it('reads CLAUDE.md when provider is claude', async () => {
+      mockDetectProvider.mockResolvedValue({ provider: 'claude', configDir: '.claude' });
       const { serverMock, getCallbackByUri } = createMockServer();
       mockReadFile.mockResolvedValue('# Claude instructions' as never);
 
       registerConfigResources(serverMock as never, ROOT);
-      const cb = getCallbackByUri('specrails://config/claude')!;
-      const result = await cb(new URL('specrails://config/claude'), {});
+      const cb = getCallbackByUri('specrails://config/instructions')!;
+      const result = await cb(new URL('specrails://config/instructions'), {});
 
       expect(result.contents[0].text).toBe('# Claude instructions');
       expect(result.contents[0].mimeType).toBe('text/markdown');
       expect(mockReadFile).toHaveBeenCalledWith(expect.stringContaining('CLAUDE.md'), 'utf-8');
+    });
+
+    it('reads CODEX.md when provider is codex', async () => {
+      mockDetectProvider.mockResolvedValue({ provider: 'codex', configDir: '.codex' });
+      const { serverMock, getCallbackByUri } = createMockServer();
+      mockReadFile.mockResolvedValue('# Codex instructions' as never);
+
+      registerConfigResources(serverMock as never, ROOT);
+      const cb = getCallbackByUri('specrails://config/instructions')!;
+      const result = await cb(new URL('specrails://config/instructions'), {});
+
+      expect(result.contents[0].text).toBe('# Codex instructions');
+      expect(mockReadFile).toHaveBeenCalledWith(expect.stringContaining('CODEX.md'), 'utf-8');
     });
   });
 });
