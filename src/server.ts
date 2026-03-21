@@ -2,6 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerSpecsResources } from './resources/specs.js';
 import { registerChangesResources } from './resources/changes.js';
 import { registerConfigResources } from './resources/config.js';
+import { registerPersonasResources } from './resources/personas.js';
+import { registerMemoryResources } from './resources/memory.js';
 
 export const SERVER_NAME = 'specrails-mcp';
 export const SERVER_VERSION = '0.1.0';
@@ -19,6 +21,8 @@ export function createServer(projectRoot: string): McpServer {
   registerSpecsResources(server, projectRoot);
   registerChangesResources(server, projectRoot);
   registerConfigResources(server, projectRoot);
+  registerPersonasResources(server, projectRoot);
+  registerMemoryResources(server, projectRoot);
 
   return server;
 }
