@@ -27,3 +27,11 @@ export function isWithinRoot(root: string, target: string): boolean {
     return false;
   }
 }
+
+/**
+ * Returns the specrails project root from SPECRAILS_PROJECT_ROOT env var
+ * or defaults to the current working directory.
+ */
+export function getProjectRoot(): string {
+  return process.env['SPECRAILS_PROJECT_ROOT'] ?? process.cwd();
+}

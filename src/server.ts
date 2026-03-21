@@ -1,17 +1,24 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerSpecsResources } from './resources/specs.js';
+import { registerChangesResources } from './resources/changes.js';
+import { registerConfigResources } from './resources/config.js';
 
 export const SERVER_NAME = 'specrails-mcp';
 export const SERVER_VERSION = '0.1.0';
 
 /**
  * Creates and configures the MCP server instance.
- * Resources and tools are registered by their respective modules.
+ * Registers all read-only resources scoped to the given project root.
  */
-export function createServer(): McpServer {
+export function createServer(projectRoot: string): McpServer {
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
   });
+
+  registerSpecsResources(server, projectRoot);
+  registerChangesResources(server, projectRoot);
+  registerConfigResources(server, projectRoot);
 
   return server;
 }

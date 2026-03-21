@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { safeResolve, isWithinRoot } from '../../src/utils/paths.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { safeResolve, isWithinRoot, getProjectRoot } from '../../src/utils/paths.js';
 import { resolve } from 'path';
 
 const ROOT = '/tmp/test-root';
@@ -31,5 +31,21 @@ describe('isWithinRoot', () => {
 
   it('returns false for traversal attempts', () => {
     expect(isWithinRoot(ROOT, '../outside')).toBe(false);
+  });
+});
+
+describe('getProjectRoot', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('returns SPECRAILS_PROJECT_ROOT when set', () => {
+    vi.stubEnv('SPECRAILS_PROJECT_ROOT', '/custom/root');
+    expect(getProjectRoot()).toBe('/custom/root');
+  });
+
+  it('returns process.cwd() when env var is undefined', () => {
+    delete process.env['SPECRAILS_PROJECT_ROOT'];
+    expect(getProjectRoot()).toBe(process.cwd());
   });
 });
