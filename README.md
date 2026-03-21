@@ -1,0 +1,1 @@
+# specrails-mcp
