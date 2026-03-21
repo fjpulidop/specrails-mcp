@@ -70,9 +70,9 @@ vi.mock('../../src/hub/db.js', async () => {
   };
 });
 
-import { getProjects } from '../../src/tools/hub-get-projects.js';
-import { getJobs, getJobDetail } from '../../src/tools/hub-get-jobs.js';
-import { getAnalytics } from '../../src/tools/hub-get-analytics.js';
+import { getProjects, getProject, registerHubGetProjectsTool } from '../../src/tools/hub-get-projects.js';
+import { getJobs, getJobDetail, registerHubGetJobsTool } from '../../src/tools/hub-get-jobs.js';
+import { getAnalytics, registerHubGetAnalyticsTool } from '../../src/tools/hub-get-analytics.js';
 
 // ─── getProjects ──────────────────────────────────────────────────────────────
 
@@ -169,5 +169,191 @@ describe('getAnalytics — per project', () => {
 
   it('throws for unknown project', () => {
     expect(() => getAnalytics({ projectId: 'unknown' })).toThrow('Project not found');
+  });
+
+  it('returns project analytics for all-time period', () => {
+    const result = getAnalytics({ projectId: 'proj-1', period: 'all' });
+    expect('kpi' in result).toBe(true);
+    if ('kpi' in result) {
+      // all period: includes old 2024 jobs
+      expect(result.kpi.totalJobs).toBe(2);
+      expect(result.period).toBe('all');
+    }
+  });
+
+  it('returns project analytics for 7d period', () => {
+    const result = getAnalytics({ projectId: 'proj-1', period: '7d' });
+    expect('kpi' in result).toBe(true);
+  });
+});
+
+describe('getAnalytics — hub-wide with jobs (all period)', () => {
+  it('includes byProject entries when period=all covers old jobs', () => {
+    const result = getAnalytics({ period: 'all' });
+    expect('hub' in result).toBe(true);
+    if ('hub' in result) {
+      // The mock creates a fresh project db per project call (2 projects × 2 jobs = 4 total)
+      expect(result.hub.totalJobs).toBeGreaterThan(0);
+      expect(result.hub.totalCostUsd).toBeGreaterThan(0);
+      // successRate branch: hubTotalJobs > 0, so rate is computed (not zero-division path)
+      expect(result.hub.successRate).toBeGreaterThanOrEqual(0);
+      expect(result.byProject.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ─── getProject ───────────────────────────────────────────────────────────────
+
+describe('getProject', () => {
+  it('returns a single project by ID', () => {
+    const result = getProject('proj-1');
+    expect(result.id).toBe('proj-1');
+    expect(result.name).toBe('My Project');
+    expect(result.slug).toBe('my-project');
+  });
+
+  it('throws for unknown project ID', () => {
+    expect(() => getProject('does-not-exist')).toThrow('Project not found');
+  });
+});
+
+// ─── registerHubGetProjectsTool ───────────────────────────────────────────────
+
+describe('registerHubGetProjectsTool', () => {
+  it('registers list_projects and get_project tools', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetProjectsTool(server as never);
+    expect(server.tool).toHaveBeenCalledTimes(2);
+    expect(server.tool.mock.calls[0]?.[0]).toBe('list_projects');
+    expect(server.tool.mock.calls[1]?.[0]).toBe('get_project');
+  });
+
+  it('list_projects handler returns all projects as JSON', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetProjectsTool(server as never);
+
+    // list_projects: server.tool(name, description, schema, handler) → handler at index 3
+    const handler = server.tool.mock.calls[0]?.[3] as () => {
+      content: Array<{ type: string; text: string }>;
+    };
+    const result = handler();
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as { projects: unknown[] };
+    expect(data.projects).toHaveLength(2);
+  });
+
+  it('get_project handler returns project details as JSON', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetProjectsTool(server as never);
+
+    const handler = server.tool.mock.calls[1]?.[3] as (p: { projectId: string }) => {
+      content: Array<{ type: string; text: string }>;
+    };
+    const result = handler({ projectId: 'proj-1' });
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as { id: string };
+    expect(data.id).toBe('proj-1');
+  });
+});
+
+// ─── registerHubGetJobsTool ───────────────────────────────────────────────────
+
+describe('registerHubGetJobsTool', () => {
+  it('registers get_jobs and get_job_detail tools', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetJobsTool(server as never);
+    expect(server.tool).toHaveBeenCalledTimes(2);
+    expect(server.tool.mock.calls[0]?.[0]).toBe('get_jobs');
+    expect(server.tool.mock.calls[1]?.[0]).toBe('get_job_detail');
+  });
+
+  it('get_jobs handler returns jobs list as JSON', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetJobsTool(server as never);
+
+    const handler = server.tool.mock.calls[0]?.[3] as (p: {
+      projectId: string;
+      limit: number;
+      offset: number;
+      status?: 'running' | 'success' | 'failed' | 'cancelled';
+    }) => { content: Array<{ type: string; text: string }> };
+
+    const result = handler({ projectId: 'proj-1', limit: 20, offset: 0 });
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as {
+      jobs: unknown[];
+      total: number;
+    };
+    expect(data.jobs).toHaveLength(2);
+    expect(data.total).toBe(2);
+  });
+
+  it('get_jobs handler passes status filter', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetJobsTool(server as never);
+
+    const handler = server.tool.mock.calls[0]?.[3] as (p: {
+      projectId: string;
+      limit: number;
+      offset: number;
+      status?: 'running' | 'success' | 'failed' | 'cancelled';
+    }) => { content: Array<{ type: string; text: string }> };
+
+    const result = handler({ projectId: 'proj-1', limit: 20, offset: 0, status: 'success' });
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as { jobs: unknown[] };
+    expect(data.jobs).toHaveLength(1);
+  });
+
+  it('get_job_detail handler returns job detail with truncated events', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetJobsTool(server as never);
+
+    const handler = server.tool.mock.calls[1]?.[3] as (p: {
+      projectId: string;
+      jobId: string;
+    }) => { content: Array<{ type: string; text: string }> };
+
+    const result = handler({ projectId: 'proj-1', jobId: 'job-a' });
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as {
+      job: { id: string; events: unknown[] };
+    };
+    expect(data.job.id).toBe('job-a');
+    expect(Array.isArray(data.job.events)).toBe(true);
+  });
+});
+
+// ─── registerHubGetAnalyticsTool ──────────────────────────────────────────────
+
+describe('registerHubGetAnalyticsTool', () => {
+  it('registers get_analytics tool', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetAnalyticsTool(server as never);
+    expect(server.tool).toHaveBeenCalledOnce();
+    expect(server.tool.mock.calls[0]?.[0]).toBe('get_analytics');
+  });
+
+  it('handler returns hub-wide analytics as JSON', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetAnalyticsTool(server as never);
+
+    const handler = server.tool.mock.calls[0]?.[3] as (p: {
+      period: '7d' | '30d' | 'all';
+      projectId?: string;
+    }) => { content: Array<{ type: string; text: string }> };
+
+    const result = handler({ period: '30d' });
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as { hub: unknown };
+    expect(data.hub).toBeDefined();
+  });
+
+  it('handler returns project analytics when projectId provided', () => {
+    const server = { tool: vi.fn() };
+    registerHubGetAnalyticsTool(server as never);
+
+    const handler = server.tool.mock.calls[0]?.[3] as (p: {
+      period: '7d' | '30d' | 'all';
+      projectId?: string;
+    }) => { content: Array<{ type: string; text: string }> };
+
+    const result = handler({ period: 'all', projectId: 'proj-1' });
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as { kpi: unknown };
+    expect(data.kpi).toBeDefined();
   });
 });
