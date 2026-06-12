@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import type { DatabaseType } from '../../src/hub/types.js';
+import type { DatabaseType } from '../../src/desktop/types.js';
 
 // ─── In-memory DB helpers ─────────────────────────────────────────────────────
 
@@ -8,7 +8,7 @@ function recentTs(daysAgo = 1): string {
   return new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 19);
 }
 
-function makeHubDb(): DatabaseType {
+function makeDesktopDb(): DatabaseType {
   const db = new Database(':memory:');
   db.exec(`
     CREATE TABLE projects (
@@ -27,7 +27,7 @@ function makeHubDb(): DatabaseType {
   return db;
 }
 
-function makeEmptyHubDb(): DatabaseType {
+function makeEmptyDesktopDb(): DatabaseType {
   const db = new Database(':memory:');
   db.exec(`
     CREATE TABLE projects (
@@ -103,18 +103,18 @@ function makeProjectDb(): DatabaseType {
 
 // ─── Mock the db module ───────────────────────────────────────────────────────
 
-const { mockOpenHubDb, mockOpenProjectDb } = vi.hoisted(() => ({
-  mockOpenHubDb: vi.fn(),
+const { mockOpenDesktopDb, mockOpenProjectDb } = vi.hoisted(() => ({
+  mockOpenDesktopDb: vi.fn(),
   mockOpenProjectDb: vi.fn(),
 }));
 
-import type * as HubDb from '../../src/hub/db.js';
+import type * as DesktopDb from '../../src/desktop/db.js';
 
-vi.mock('../../src/hub/db.js', async () => {
-  const actual = await vi.importActual<typeof HubDb>('../../src/hub/db.js');
+vi.mock('../../src/desktop/db.js', async () => {
+  const actual = await vi.importActual<typeof DesktopDb>('../../src/desktop/db.js');
   return {
     ...actual,
-    openHubDb: mockOpenHubDb,
+    openDesktopDb: mockOpenDesktopDb,
     openProjectDb: mockOpenProjectDb,
   };
 });
@@ -148,37 +148,37 @@ function createMockServer(): {
 
 // ─── Imports after mock ───────────────────────────────────────────────────────
 
-import { registerHubProjectsResources } from '../../src/resources/hub-projects.js';
-import { registerHubJobsResources } from '../../src/resources/hub-jobs.js';
-import { registerHubAnalyticsResources } from '../../src/resources/hub-analytics.js';
+import { registerDesktopProjectsResources } from '../../src/resources/desktop-projects.js';
+import { registerDesktopJobsResources } from '../../src/resources/desktop-jobs.js';
+import { registerDesktopAnalyticsResources } from '../../src/resources/desktop-analytics.js';
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockOpenHubDb.mockImplementation(makeHubDb);
+  mockOpenDesktopDb.mockImplementation(makeDesktopDb);
   mockOpenProjectDb.mockImplementation(makeProjectDb);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// registerHubProjectsResources
+// registerDesktopProjectsResources
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('registerHubProjectsResources', () => {
-  it('registers hub-projects and hub-project resources', () => {
+describe('registerDesktopProjectsResources', () => {
+  it('registers desktop-projects and desktop-project resources', () => {
     const { server } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
     expect(server.resource).toHaveBeenCalledTimes(2);
-    expect(server.resource.mock.calls[0]?.[0]).toBe('hub-projects');
-    expect(server.resource.mock.calls[1]?.[0]).toBe('hub-project');
+    expect(server.resource.mock.calls[0]?.[0]).toBe('desktop-projects');
+    expect(server.resource.mock.calls[1]?.[0]).toBe('desktop-project');
   });
 
   it('lists all projects with markdown content', () => {
     const { server, getCallback } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
 
-    const cb = getCallback('hub-projects');
-    const result = cb(new URL('specrails://hub/projects'));
+    const cb = getCallback('desktop-projects');
+    const result = cb(new URL('specrails://desktop/projects'));
 
     expect(result.contents[0]?.text).toContain('My Project');
     expect(result.contents[0]?.text).toContain('Other Project');
@@ -186,23 +186,23 @@ describe('registerHubProjectsResources', () => {
     expect(result.contents[0]?.mimeType).toBe('text/markdown');
   });
 
-  it('returns "no projects" message when hub is empty', () => {
-    mockOpenHubDb.mockImplementation(makeEmptyHubDb);
+  it('returns "no projects" message when registry is empty', () => {
+    mockOpenDesktopDb.mockImplementation(makeEmptyDesktopDb);
     const { server, getCallback } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
 
-    const cb = getCallback('hub-projects');
-    const result = cb(new URL('specrails://hub/projects'));
+    const cb = getCallback('desktop-projects');
+    const result = cb(new URL('specrails://desktop/projects'));
 
     expect(result.contents[0]?.text).toContain('No projects registered');
   });
 
   it('returns project details for a valid project ID', () => {
     const { server, getCallback } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
 
-    const cb = getCallback('hub-project');
-    const result = cb(new URL('specrails://hub/projects/proj-1'), { projectId: 'proj-1' });
+    const cb = getCallback('desktop-project');
+    const result = cb(new URL('specrails://desktop/projects/proj-1'), { projectId: 'proj-1' });
 
     expect(result.contents[0]?.text).toContain('My Project');
     expect(result.contents[0]?.text).toContain('Total jobs');
@@ -211,10 +211,10 @@ describe('registerHubProjectsResources', () => {
 
   it('handles array projectId variable (takes first)', () => {
     const { server, getCallback } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
 
-    const cb = getCallback('hub-project');
-    const result = cb(new URL('specrails://hub/projects/proj-1'), {
+    const cb = getCallback('desktop-project');
+    const result = cb(new URL('specrails://desktop/projects/proj-1'), {
       projectId: ['proj-1', 'proj-2'],
     });
 
@@ -223,22 +223,22 @@ describe('registerHubProjectsResources', () => {
 
   it('includes avg duration when > 0', () => {
     const { server, getCallback } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
 
-    const cb = getCallback('hub-project');
-    const result = cb(new URL('specrails://hub/projects/proj-1'), { projectId: 'proj-1' });
+    const cb = getCallback('desktop-project');
+    const result = cb(new URL('specrails://desktop/projects/proj-1'), { projectId: 'proj-1' });
 
     expect(result.contents[0]?.text).toContain('Avg duration');
   });
 
   it('throws for unknown project', () => {
     const { server, getCallback } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
 
-    const cb = getCallback('hub-project');
-    expect(() => cb(new URL('specrails://hub/projects/unknown'), { projectId: 'unknown' })).toThrow(
-      'Project not found',
-    );
+    const cb = getCallback('desktop-project');
+    expect(() =>
+      cb(new URL('specrails://desktop/projects/unknown'), { projectId: 'unknown' }),
+    ).toThrow('Project not found');
   });
 
   it('shows fallback when project db is unavailable', () => {
@@ -246,34 +246,34 @@ describe('registerHubProjectsResources', () => {
       throw new Error('Project DB not found');
     });
     const { server, getCallback } = createMockServer();
-    registerHubProjectsResources(server as never);
+    registerDesktopProjectsResources(server as never);
 
-    const cb = getCallback('hub-project');
-    const result = cb(new URL('specrails://hub/projects/proj-1'), { projectId: 'proj-1' });
+    const cb = getCallback('desktop-project');
+    const result = cb(new URL('specrails://desktop/projects/proj-1'), { projectId: 'proj-1' });
 
     expect(result.contents[0]?.text).toContain('not yet available');
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// registerHubJobsResources
+// registerDesktopJobsResources
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('registerHubJobsResources', () => {
-  it('registers hub-project-jobs and hub-job resources', () => {
+describe('registerDesktopJobsResources', () => {
+  it('registers desktop-project-jobs and desktop-job resources', () => {
     const { server } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
     expect(server.resource).toHaveBeenCalledTimes(2);
-    expect(server.resource.mock.calls[0]?.[0]).toBe('hub-project-jobs');
-    expect(server.resource.mock.calls[1]?.[0]).toBe('hub-job');
+    expect(server.resource.mock.calls[0]?.[0]).toBe('desktop-project-jobs');
+    expect(server.resource.mock.calls[1]?.[0]).toBe('desktop-job');
   });
 
   it('lists jobs with status icons for all statuses', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-project-jobs');
-    const result = cb(new URL('specrails://hub/projects/proj-1/jobs'), { projectId: 'proj-1' });
+    const cb = getCallback('desktop-project-jobs');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/jobs'), { projectId: 'proj-1' });
 
     const text = result.contents[0]?.text ?? '';
     expect(text).toContain('✅'); // success
@@ -287,10 +287,10 @@ describe('registerHubJobsResources', () => {
 
   it('handles array projectId variable for jobs list', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-project-jobs');
-    const result = cb(new URL('specrails://hub/projects/proj-1/jobs'), {
+    const cb = getCallback('desktop-project-jobs');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/jobs'), {
       projectId: ['proj-1', 'proj-2'],
     });
 
@@ -321,30 +321,30 @@ describe('registerHubJobsResources', () => {
     mockOpenProjectDb.mockReturnValueOnce(emptyProjectDb);
 
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-project-jobs');
-    const result = cb(new URL('specrails://hub/projects/proj-1/jobs'), { projectId: 'proj-1' });
+    const cb = getCallback('desktop-project-jobs');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/jobs'), { projectId: 'proj-1' });
 
     expect(result.contents[0]?.text).toContain('No jobs found');
   });
 
   it('throws for unknown project in jobs list', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-project-jobs');
+    const cb = getCallback('desktop-project-jobs');
     expect(() =>
-      cb(new URL('specrails://hub/projects/unknown/jobs'), { projectId: 'unknown' }),
+      cb(new URL('specrails://desktop/projects/unknown/jobs'), { projectId: 'unknown' }),
     ).toThrow('Project not found');
   });
 
   it('returns job detail with events and phases', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-job');
-    const result = cb(new URL('specrails://hub/projects/proj-1/jobs/job-a'), {
+    const cb = getCallback('desktop-job');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/jobs/job-a'), {
       projectId: 'proj-1',
       jobId: 'job-a',
     });
@@ -359,10 +359,10 @@ describe('registerHubJobsResources', () => {
 
   it('handles array variables for job detail', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-job');
-    const result = cb(new URL('specrails://hub/projects/proj-1/jobs/job-a'), {
+    const cb = getCallback('desktop-job');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/jobs/job-a'), {
       projectId: ['proj-1', 'other'],
       jobId: ['job-a', 'job-b'],
     });
@@ -372,11 +372,11 @@ describe('registerHubJobsResources', () => {
 
   it('throws for unknown project in job detail', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-job');
+    const cb = getCallback('desktop-job');
     expect(() =>
-      cb(new URL('specrails://hub/projects/unknown/jobs/job-a'), {
+      cb(new URL('specrails://desktop/projects/unknown/jobs/job-a'), {
         projectId: 'unknown',
         jobId: 'job-a',
       }),
@@ -385,11 +385,11 @@ describe('registerHubJobsResources', () => {
 
   it('throws for unknown job in job detail', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-job');
+    const cb = getCallback('desktop-job');
     expect(() =>
-      cb(new URL('specrails://hub/projects/proj-1/jobs/nope'), {
+      cb(new URL('specrails://desktop/projects/proj-1/jobs/nope'), {
         projectId: 'proj-1',
         jobId: 'nope',
       }),
@@ -398,11 +398,11 @@ describe('registerHubJobsResources', () => {
 
   it('renders job without optional fields (null values)', () => {
     const { server, getCallback } = createMockServer();
-    registerHubJobsResources(server as never);
+    registerDesktopJobsResources(server as never);
 
-    const cb = getCallback('hub-job');
+    const cb = getCallback('desktop-job');
     // job-c has null cost/tokens/model
-    const result = cb(new URL('specrails://hub/projects/proj-1/jobs/job-c'), {
+    const result = cb(new URL('specrails://desktop/projects/proj-1/jobs/job-c'), {
       projectId: 'proj-1',
       jobId: 'job-c',
     });
@@ -415,27 +415,27 @@ describe('registerHubJobsResources', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// registerHubAnalyticsResources
+// registerDesktopAnalyticsResources
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('registerHubAnalyticsResources', () => {
-  it('registers hub-analytics and hub-project-analytics resources', () => {
+describe('registerDesktopAnalyticsResources', () => {
+  it('registers desktop-analytics and desktop-project-analytics resources', () => {
     const { server } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
     expect(server.resource).toHaveBeenCalledTimes(2);
-    expect(server.resource.mock.calls[0]?.[0]).toBe('hub-analytics');
-    expect(server.resource.mock.calls[1]?.[0]).toBe('hub-project-analytics');
+    expect(server.resource.mock.calls[0]?.[0]).toBe('desktop-analytics');
+    expect(server.resource.mock.calls[1]?.[0]).toBe('desktop-project-analytics');
   });
 
-  it('returns hub-wide analytics summary (with projects having recent jobs)', () => {
+  it('returns app-wide analytics summary (with projects having recent jobs)', () => {
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-analytics');
-    const result = cb(new URL('specrails://hub/analytics'));
+    const cb = getCallback('desktop-analytics');
+    const result = cb(new URL('specrails://desktop/analytics'));
 
     const text = result.contents[0]?.text ?? '';
-    expect(text).toContain('Hub Summary');
+    expect(text).toContain('Summary');
     expect(text).toContain('Total jobs');
     expect(text).toContain('Success rate');
     expect(result.contents[0]?.mimeType).toBe('text/markdown');
@@ -443,25 +443,25 @@ describe('registerHubAnalyticsResources', () => {
 
   it('shows "By Project" section when projects have jobs', () => {
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-analytics');
-    const result = cb(new URL('specrails://hub/analytics'));
+    const cb = getCallback('desktop-analytics');
+    const result = cb(new URL('specrails://desktop/analytics'));
 
     // With recent jobs, projects should appear in By Project table
     const text = result.contents[0]?.text ?? '';
-    expect(text).toContain('Hub Summary');
-    // Success rate calculation exercises the `hubTotalJobs > 0` branch
+    expect(text).toContain('Summary');
+    // Success rate calculation exercises the `totalJobsAcrossProjects > 0` branch
     expect(text).toMatch(/Success rate.*%/);
   });
 
-  it('returns "no projects" message for empty hub', () => {
-    mockOpenHubDb.mockImplementation(makeEmptyHubDb);
+  it('returns "no projects" message for empty registry', () => {
+    mockOpenDesktopDb.mockImplementation(makeEmptyDesktopDb);
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-analytics');
-    const result = cb(new URL('specrails://hub/analytics'));
+    const cb = getCallback('desktop-analytics');
+    const result = cb(new URL('specrails://desktop/analytics'));
 
     expect(result.contents[0]?.text).toContain('No projects registered');
   });
@@ -471,21 +471,21 @@ describe('registerHubAnalyticsResources', () => {
       throw new Error('Project DB not found');
     });
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-analytics');
-    const result = cb(new URL('specrails://hub/analytics'));
+    const cb = getCallback('desktop-analytics');
+    const result = cb(new URL('specrails://desktop/analytics'));
 
     // Should not throw; just skip the project
-    expect(result.contents[0]?.text).toContain('Hub Summary');
+    expect(result.contents[0]?.text).toContain('Summary');
   });
 
   it('returns project analytics for a valid project', () => {
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-project-analytics');
-    const result = cb(new URL('specrails://hub/projects/proj-1/analytics'), {
+    const cb = getCallback('desktop-project-analytics');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/analytics'), {
       projectId: 'proj-1',
     });
 
@@ -498,10 +498,10 @@ describe('registerHubAnalyticsResources', () => {
 
   it('includes token usage section when tokens > 0', () => {
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-project-analytics');
-    const result = cb(new URL('specrails://hub/projects/proj-1/analytics'), {
+    const cb = getCallback('desktop-project-analytics');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/analytics'), {
       projectId: 'proj-1',
     });
 
@@ -511,10 +511,10 @@ describe('registerHubAnalyticsResources', () => {
 
   it('handles array projectId for project analytics', () => {
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-project-analytics');
-    const result = cb(new URL('specrails://hub/projects/proj-1/analytics'), {
+    const cb = getCallback('desktop-project-analytics');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/analytics'), {
       projectId: ['proj-1', 'proj-2'],
     });
 
@@ -523,20 +523,20 @@ describe('registerHubAnalyticsResources', () => {
 
   it('throws for unknown project in project analytics', () => {
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-project-analytics');
+    const cb = getCallback('desktop-project-analytics');
     expect(() =>
-      cb(new URL('specrails://hub/projects/unknown/analytics'), { projectId: 'unknown' }),
+      cb(new URL('specrails://desktop/projects/unknown/analytics'), { projectId: 'unknown' }),
     ).toThrow('Project not found');
   });
 
   it('includes avg duration line when avg_duration_ms > 0', () => {
     const { server, getCallback } = createMockServer();
-    registerHubAnalyticsResources(server as never);
+    registerDesktopAnalyticsResources(server as never);
 
-    const cb = getCallback('hub-project-analytics');
-    const result = cb(new URL('specrails://hub/projects/proj-1/analytics'), {
+    const cb = getCallback('desktop-project-analytics');
+    const result = cb(new URL('specrails://desktop/projects/proj-1/analytics'), {
       projectId: 'proj-1',
     });
 

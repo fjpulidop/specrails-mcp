@@ -14,18 +14,18 @@ vi.mock('node:fs', () => ({
   },
 }));
 
-// ─── Mock hub/db.js ───────────────────────────────────────────────────────────
+// ─── Mock desktop/db.js ───────────────────────────────────────────────────────────
 
-const { mockOpenHubDb, mockQueryProjects, mockGetHubApiBase } = vi.hoisted(() => ({
-  mockOpenHubDb: vi.fn(),
+const { mockOpenDesktopDb, mockQueryProjects, mockGetDesktopApiBase } = vi.hoisted(() => ({
+  mockOpenDesktopDb: vi.fn(),
   mockQueryProjects: vi.fn(),
-  mockGetHubApiBase: vi.fn(),
+  mockGetDesktopApiBase: vi.fn(),
 }));
 
-vi.mock('../../src/hub/db.js', () => ({
-  openHubDb: mockOpenHubDb,
+vi.mock('../../src/desktop/db.js', () => ({
+  openDesktopDb: mockOpenDesktopDb,
   queryProjects: mockQueryProjects,
-  getHubApiBase: mockGetHubApiBase,
+  getDesktopApiBase: mockGetDesktopApiBase,
 }));
 
 // ─── Mock global fetch ────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ const mockFetch = vi.fn();
 
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 
-import { getHubStatus, registerHubStatusTool } from '../../src/tools/hub-status.js';
+import { getDesktopStatus, registerDesktopStatusTool } from '../../src/tools/desktop-status.js';
 
 // ─── Shared mock DB object ────────────────────────────────────────────────────
 
@@ -46,12 +46,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   // Default: db available with 2 projects
-  mockOpenHubDb.mockReturnValue(mockDb);
+  mockOpenDesktopDb.mockReturnValue(mockDb);
   mockQueryProjects.mockReturnValue([
     { id: 'proj-1', slug: 'my-project', name: 'My Project' },
     { id: 'proj-2', slug: 'other', name: 'Other' },
   ]);
-  mockGetHubApiBase.mockReturnValue('http://localhost:4200');
+  mockGetDesktopApiBase.mockReturnValue('http://localhost:4200');
 
   // Default: no pid file
   fsExistsSyncMock.mockReturnValue(false);
@@ -65,26 +65,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ─── getHubStatus tests ───────────────────────────────────────────────────────
+// ─── getDesktopStatus tests ───────────────────────────────────────────────────────
 
-describe('getHubStatus', () => {
-  it('returns db info when hub database exists', async () => {
-    const result = await getHubStatus();
-    expect(result.hubDbExists).toBe(true);
+describe('getDesktopStatus', () => {
+  it('returns db info when desktop database exists', async () => {
+    const result = await getDesktopStatus();
+    expect(result.desktopDbExists).toBe(true);
     expect(result.projectCount).toBe(2);
   });
 
-  it('returns hubDbExists=false when openHubDb throws', async () => {
-    mockOpenHubDb.mockImplementation(() => {
+  it('returns desktopDbExists=false when openDesktopDb throws', async () => {
+    mockOpenDesktopDb.mockImplementation(() => {
       throw new Error('DB not found');
     });
-    const result = await getHubStatus();
-    expect(result.hubDbExists).toBe(false);
+    const result = await getDesktopStatus();
+    expect(result.desktopDbExists).toBe(false);
     expect(result.projectCount).toBe(0);
   });
 
   it('returns pidFileExists=false when pid file does not exist', async () => {
-    const result = await getHubStatus();
+    const result = await getDesktopStatus();
     expect(result.pidFileExists).toBe(false);
     expect(result.pid).toBeNull();
   });
@@ -93,7 +93,7 @@ describe('getHubStatus', () => {
     fsExistsSyncMock.mockReturnValue(true);
     fsReadFileSyncMock.mockReturnValue('12345\n');
 
-    const result = await getHubStatus();
+    const result = await getDesktopStatus();
     expect(result.pidFileExists).toBe(true);
     expect(result.pid).toBe(12345);
   });
@@ -104,44 +104,56 @@ describe('getHubStatus', () => {
       throw new Error('Permission denied');
     });
 
-    const result = await getHubStatus();
+    const result = await getDesktopStatus();
     expect(result.pidFileExists).toBe(true);
     expect(result.pid).toBeNull();
   });
 
   it('returns serverReachable=false when fetch fails', async () => {
     mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
-    const result = await getHubStatus();
+    const result = await getDesktopStatus();
     expect(result.serverReachable).toBe(false);
   });
 
   it('returns serverReachable=true when fetch returns ok', async () => {
     mockFetch.mockResolvedValue({ ok: true } as Response);
-    const result = await getHubStatus();
+    const result = await getDesktopStatus();
     expect(result.serverReachable).toBe(true);
     expect(result.serverUrl).toBe('http://localhost:4200');
   });
 
-  it('returns serverReachable=false when fetch returns not-ok', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 503 } as Response);
-    const result = await getHubStatus();
-    expect(result.serverReachable).toBe(false);
+  it('returns serverReachable=true on a 401 (auth-gated /api/state still proves the server is up)', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 401 } as Response);
+    const result = await getDesktopStatus();
+    expect(result.serverReachable).toBe(true);
+  });
+
+  it('returns serverReachable=true on a 404 (pre-rebrand desktop without /api/state)', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 } as Response);
+    const result = await getDesktopStatus();
+    expect(result.serverReachable).toBe(true);
+  });
+
+  it('probes the /api/state endpoint', async () => {
+    mockFetch.mockResolvedValue({ ok: true } as Response);
+    await getDesktopStatus();
+    expect(mockFetch.mock.calls[0]?.[0]).toBe('http://localhost:4200/api/state');
   });
 
   it('includes serverUrl in result', async () => {
-    const result = await getHubStatus();
+    const result = await getDesktopStatus();
     expect(result.serverUrl).toBe('http://localhost:4200');
   });
 });
 
-// ─── registerHubStatusTool tests ─────────────────────────────────────────────
+// ─── registerDesktopStatusTool tests ─────────────────────────────────────────────
 
-describe('registerHubStatusTool', () => {
-  it('registers hub_status tool', () => {
+describe('registerDesktopStatusTool', () => {
+  it('registers desktop_status tool', () => {
     const server = { tool: vi.fn() };
-    registerHubStatusTool(server as never);
+    registerDesktopStatusTool(server as never);
     expect(server.tool).toHaveBeenCalledOnce();
-    expect(server.tool.mock.calls[0]?.[0]).toBe('hub_status');
+    expect(server.tool.mock.calls[0]?.[0]).toBe('desktop_status');
   });
 
   it('handler returns formatted status text', async () => {
@@ -150,7 +162,7 @@ describe('registerHubStatusTool', () => {
     mockFetch.mockResolvedValue({ ok: true } as Response);
 
     const server = { tool: vi.fn() };
-    registerHubStatusTool(server as never);
+    registerDesktopStatusTool(server as never);
 
     // Extract and invoke the registered handler
     const handler = server.tool.mock.calls[0]?.[3] as () => Promise<{
@@ -159,21 +171,21 @@ describe('registerHubStatusTool', () => {
     const result = await handler();
 
     const text = result.content[0]?.text ?? '';
-    expect(text).toContain('specrails-hub Status');
-    expect(text).toContain('Hub DB');
+    expect(text).toContain('Specrails Desktop Status');
+    expect(text).toContain('Desktop DB');
     expect(text).toContain('Projects');
     expect(text).toContain('Server');
     expect(text).toContain('PID file');
   });
 
   it('handler shows db not found status', async () => {
-    mockOpenHubDb.mockImplementation(() => {
+    mockOpenDesktopDb.mockImplementation(() => {
       throw new Error('DB not found');
     });
     mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
 
     const server = { tool: vi.fn() };
-    registerHubStatusTool(server as never);
+    registerDesktopStatusTool(server as never);
 
     const handler = server.tool.mock.calls[0]?.[3] as () => Promise<{
       content: Array<{ type: string; text: string }>;

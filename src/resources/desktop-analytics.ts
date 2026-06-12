@@ -1,36 +1,36 @@
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
-  openHubDb,
+  openDesktopDb,
   openProjectDb,
   queryProjects,
   queryProjectById,
   queryAnalytics,
   queryCostTimeline,
-} from '../hub/db.js';
+} from '../desktop/db.js';
 
 type Period = '7d' | '30d' | 'all';
 
-// ─── Resource: hub-wide analytics ────────────────────────────────────────────
+// ─── Resource: app-wide analytics ────────────────────────────────────────────
 
-function hubAnalyticsResource(period: Period = '30d'): string {
-  const hubDb = openHubDb();
+function desktopAnalyticsResource(period: Period = '30d'): string {
+  const desktopDb = openDesktopDb();
   try {
-    const projects = queryProjects(hubDb);
+    const projects = queryProjects(desktopDb);
 
     if (projects.length === 0) {
-      return 'No projects registered. Add projects to specrails-hub to see analytics.';
+      return 'No projects registered. Add projects to Specrails Desktop to see analytics.';
     }
 
     const fromDate = periodToDate(period);
     const periodLabel =
       period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : 'All time';
 
-    const lines: string[] = [`# specrails-hub Analytics — ${periodLabel}\n`];
+    const lines: string[] = [`# Specrails Desktop Analytics — ${periodLabel}\n`];
 
-    let hubTotalCost = 0;
-    let hubTotalJobs = 0;
-    let hubSuccessJobs = 0;
+    let totalCostAcrossProjects = 0;
+    let totalJobsAcrossProjects = 0;
+    let successJobsAcrossProjects = 0;
 
     const projectStats: Array<{
       name: string;
@@ -42,9 +42,9 @@ function hubAnalyticsResource(period: Period = '30d'): string {
         const projectDb = openProjectDb(project.slug);
         try {
           const kpi = queryAnalytics(projectDb, fromDate ?? undefined);
-          hubTotalCost += kpi.total_cost_usd;
-          hubTotalJobs += kpi.total_jobs;
-          hubSuccessJobs += Math.round(kpi.total_jobs * kpi.success_rate);
+          totalCostAcrossProjects += kpi.total_cost_usd;
+          totalJobsAcrossProjects += kpi.total_jobs;
+          successJobsAcrossProjects += Math.round(kpi.total_jobs * kpi.success_rate);
           projectStats.push({ name: project.name, kpi });
         } finally {
           projectDb.close();
@@ -54,12 +54,13 @@ function hubAnalyticsResource(period: Period = '30d'): string {
       }
     }
 
-    const hubSuccessRate = hubTotalJobs > 0 ? (hubSuccessJobs / hubTotalJobs) * 100 : 0;
+    const successRateAcrossProjects =
+      totalJobsAcrossProjects > 0 ? (successJobsAcrossProjects / totalJobsAcrossProjects) * 100 : 0;
 
-    lines.push('## Hub Summary\n');
-    lines.push(`- **Total cost**: $${hubTotalCost.toFixed(4)}`);
-    lines.push(`- **Total jobs**: ${hubTotalJobs}`);
-    lines.push(`- **Success rate**: ${hubSuccessRate.toFixed(1)}%`);
+    lines.push('## Summary\n');
+    lines.push(`- **Total cost**: $${totalCostAcrossProjects.toFixed(4)}`);
+    lines.push(`- **Total jobs**: ${totalJobsAcrossProjects}`);
+    lines.push(`- **Success rate**: ${successRateAcrossProjects.toFixed(1)}%`);
     lines.push(`- **Projects active**: ${projectStats.filter((p) => p.kpi.total_jobs > 0).length}`);
     lines.push('');
 
@@ -80,16 +81,16 @@ function hubAnalyticsResource(period: Period = '30d'): string {
 
     return lines.join('\n');
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
 // ─── Resource: single project analytics ──────────────────────────────────────
 
 function projectAnalyticsResource(projectId: string, period: Period = '30d'): string {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   try {
-    const project = queryProjectById(hubDb, projectId);
+    const project = queryProjectById(desktopDb, projectId);
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
     }
@@ -141,7 +142,7 @@ function projectAnalyticsResource(projectId: string, period: Period = '30d'): st
       projectDb.close();
     }
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
@@ -155,16 +156,16 @@ function periodToDate(period: Period): string | null {
 
 // ─── Registration ─────────────────────────────────────────────────────────────
 
-export function registerHubAnalyticsResources(server: McpServer): void {
+export function registerDesktopAnalyticsResources(server: McpServer): void {
   server.resource(
-    'hub-analytics',
-    'specrails://hub/analytics',
+    'desktop-analytics',
+    'specrails://desktop/analytics',
     { description: 'Aggregated analytics across all projects (last 30 days)' },
     (_uri) => ({
       contents: [
         {
-          uri: 'specrails://hub/analytics',
-          text: hubAnalyticsResource('30d'),
+          uri: 'specrails://desktop/analytics',
+          text: desktopAnalyticsResource('30d'),
           mimeType: 'text/markdown',
         },
       ],
@@ -172,8 +173,8 @@ export function registerHubAnalyticsResources(server: McpServer): void {
   );
 
   server.resource(
-    'hub-project-analytics',
-    new ResourceTemplate('specrails://hub/projects/{projectId}/analytics', { list: undefined }),
+    'desktop-project-analytics',
+    new ResourceTemplate('specrails://desktop/projects/{projectId}/analytics', { list: undefined }),
     { description: 'Analytics for a specific project (last 30 days)' },
     (_uri, variables) => {
       const raw = variables['projectId'];
@@ -181,7 +182,7 @@ export function registerHubAnalyticsResources(server: McpServer): void {
       return {
         contents: [
           {
-            uri: `specrails://hub/projects/${projectId}/analytics`,
+            uri: `specrails://desktop/projects/${projectId}/analytics`,
             text: projectAnalyticsResource(projectId, '30d'),
             mimeType: 'text/markdown',
           },

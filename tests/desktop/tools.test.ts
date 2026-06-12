@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import type { DatabaseType } from '../../src/hub/types.js';
+import type { DatabaseType } from '../../src/desktop/types.js';
 
 // ─── DB factory helpers ───────────────────────────────────────────────────────
 
-function makeFreshHubDb(): DatabaseType {
+function makeFreshDesktopDb(): DatabaseType {
   const db = new Database(':memory:');
   db.exec(`
     CREATE TABLE projects (
@@ -58,25 +58,32 @@ function makeFreshProjectDb(): DatabaseType {
 
 // ─── Mock the db module — fresh DB per call ───────────────────────────────────
 
-import type * as HubDb from '../../src/hub/db.js';
+import type * as DesktopDb from '../../src/desktop/db.js';
 
-vi.mock('../../src/hub/db.js', async () => {
-  const actual = await vi.importActual<typeof HubDb>('../../src/hub/db.js');
+vi.mock('../../src/desktop/db.js', async () => {
+  const actual = await vi.importActual<typeof DesktopDb>('../../src/desktop/db.js');
   return {
     ...actual,
-    openHubDb: () => makeFreshHubDb(),
+    openDesktopDb: () => makeFreshDesktopDb(),
     openProjectDb: (_slug: string) => makeFreshProjectDb(),
-    getHubApiBase: () => 'http://localhost:4200',
+    getDesktopApiBase: () => 'http://localhost:4200',
   };
 });
 
 import {
   getProjects,
   getProject,
-  registerHubGetProjectsTool,
-} from '../../src/tools/hub-get-projects.js';
-import { getJobs, getJobDetail, registerHubGetJobsTool } from '../../src/tools/hub-get-jobs.js';
-import { getAnalytics, registerHubGetAnalyticsTool } from '../../src/tools/hub-get-analytics.js';
+  registerDesktopGetProjectsTool,
+} from '../../src/tools/desktop-get-projects.js';
+import {
+  getJobs,
+  getJobDetail,
+  registerDesktopGetJobsTool,
+} from '../../src/tools/desktop-get-jobs.js';
+import {
+  getAnalytics,
+  registerDesktopGetAnalyticsTool,
+} from '../../src/tools/desktop-get-analytics.js';
 
 // ─── getProjects ──────────────────────────────────────────────────────────────
 
@@ -150,12 +157,12 @@ describe('getJobDetail', () => {
 
 // ─── getAnalytics ─────────────────────────────────────────────────────────────
 
-describe('getAnalytics — hub-wide', () => {
-  it('returns hub analytics with byProject breakdown', () => {
+describe('getAnalytics — app-wide', () => {
+  it('returns app-wide analytics with byProject breakdown', () => {
     const result = getAnalytics({ period: '30d' });
-    expect('hub' in result).toBe(true);
-    if ('hub' in result) {
-      expect(result.hub.totalJobs).toBeGreaterThanOrEqual(0);
+    expect('desktop' in result).toBe(true);
+    if ('desktop' in result) {
+      expect(result.desktop.totalJobs).toBeGreaterThanOrEqual(0);
       expect(result.byProject).toBeDefined();
     }
   });
@@ -191,16 +198,16 @@ describe('getAnalytics — per project', () => {
   });
 });
 
-describe('getAnalytics — hub-wide with jobs (all period)', () => {
+describe('getAnalytics — app-wide with jobs (all period)', () => {
   it('includes byProject entries when period=all covers old jobs', () => {
     const result = getAnalytics({ period: 'all' });
-    expect('hub' in result).toBe(true);
-    if ('hub' in result) {
+    expect('desktop' in result).toBe(true);
+    if ('desktop' in result) {
       // The mock creates a fresh project db per project call (2 projects × 2 jobs = 4 total)
-      expect(result.hub.totalJobs).toBeGreaterThan(0);
-      expect(result.hub.totalCostUsd).toBeGreaterThan(0);
-      // successRate branch: hubTotalJobs > 0, so rate is computed (not zero-division path)
-      expect(result.hub.successRate).toBeGreaterThanOrEqual(0);
+      expect(result.desktop.totalJobs).toBeGreaterThan(0);
+      expect(result.desktop.totalCostUsd).toBeGreaterThan(0);
+      // successRate branch: totalJobsAcrossProjects > 0, so rate is computed (not zero-division path)
+      expect(result.desktop.successRate).toBeGreaterThanOrEqual(0);
       expect(result.byProject.length).toBeGreaterThan(0);
     }
   });
@@ -221,12 +228,12 @@ describe('getProject', () => {
   });
 });
 
-// ─── registerHubGetProjectsTool ───────────────────────────────────────────────
+// ─── registerDesktopGetProjectsTool ───────────────────────────────────────────────
 
-describe('registerHubGetProjectsTool', () => {
+describe('registerDesktopGetProjectsTool', () => {
   it('registers list_projects and get_project tools', () => {
     const server = { tool: vi.fn() };
-    registerHubGetProjectsTool(server as never);
+    registerDesktopGetProjectsTool(server as never);
     expect(server.tool).toHaveBeenCalledTimes(2);
     expect(server.tool.mock.calls[0]?.[0]).toBe('list_projects');
     expect(server.tool.mock.calls[1]?.[0]).toBe('get_project');
@@ -234,7 +241,7 @@ describe('registerHubGetProjectsTool', () => {
 
   it('list_projects handler returns all projects as JSON', () => {
     const server = { tool: vi.fn() };
-    registerHubGetProjectsTool(server as never);
+    registerDesktopGetProjectsTool(server as never);
 
     // list_projects: server.tool(name, description, schema, handler) → handler at index 3
     const handler = server.tool.mock.calls[0]?.[3] as () => {
@@ -247,7 +254,7 @@ describe('registerHubGetProjectsTool', () => {
 
   it('get_project handler returns project details as JSON', () => {
     const server = { tool: vi.fn() };
-    registerHubGetProjectsTool(server as never);
+    registerDesktopGetProjectsTool(server as never);
 
     const handler = server.tool.mock.calls[1]?.[3] as (p: { projectId: string }) => {
       content: Array<{ type: string; text: string }>;
@@ -258,12 +265,12 @@ describe('registerHubGetProjectsTool', () => {
   });
 });
 
-// ─── registerHubGetJobsTool ───────────────────────────────────────────────────
+// ─── registerDesktopGetJobsTool ───────────────────────────────────────────────────
 
-describe('registerHubGetJobsTool', () => {
+describe('registerDesktopGetJobsTool', () => {
   it('registers get_jobs and get_job_detail tools', () => {
     const server = { tool: vi.fn() };
-    registerHubGetJobsTool(server as never);
+    registerDesktopGetJobsTool(server as never);
     expect(server.tool).toHaveBeenCalledTimes(2);
     expect(server.tool.mock.calls[0]?.[0]).toBe('get_jobs');
     expect(server.tool.mock.calls[1]?.[0]).toBe('get_job_detail');
@@ -271,7 +278,7 @@ describe('registerHubGetJobsTool', () => {
 
   it('get_jobs handler returns jobs list as JSON', () => {
     const server = { tool: vi.fn() };
-    registerHubGetJobsTool(server as never);
+    registerDesktopGetJobsTool(server as never);
 
     const handler = server.tool.mock.calls[0]?.[3] as (p: {
       projectId: string;
@@ -291,7 +298,7 @@ describe('registerHubGetJobsTool', () => {
 
   it('get_jobs handler passes status filter', () => {
     const server = { tool: vi.fn() };
-    registerHubGetJobsTool(server as never);
+    registerDesktopGetJobsTool(server as never);
 
     const handler = server.tool.mock.calls[0]?.[3] as (p: {
       projectId: string;
@@ -307,7 +314,7 @@ describe('registerHubGetJobsTool', () => {
 
   it('get_job_detail handler returns job detail with truncated events', () => {
     const server = { tool: vi.fn() };
-    registerHubGetJobsTool(server as never);
+    registerDesktopGetJobsTool(server as never);
 
     const handler = server.tool.mock.calls[1]?.[3] as (p: { projectId: string; jobId: string }) => {
       content: Array<{ type: string; text: string }>;
@@ -322,19 +329,19 @@ describe('registerHubGetJobsTool', () => {
   });
 });
 
-// ─── registerHubGetAnalyticsTool ──────────────────────────────────────────────
+// ─── registerDesktopGetAnalyticsTool ──────────────────────────────────────────────
 
-describe('registerHubGetAnalyticsTool', () => {
+describe('registerDesktopGetAnalyticsTool', () => {
   it('registers get_analytics tool', () => {
     const server = { tool: vi.fn() };
-    registerHubGetAnalyticsTool(server as never);
+    registerDesktopGetAnalyticsTool(server as never);
     expect(server.tool).toHaveBeenCalledOnce();
     expect(server.tool.mock.calls[0]?.[0]).toBe('get_analytics');
   });
 
-  it('handler returns hub-wide analytics as JSON', () => {
+  it('handler returns app-wide analytics as JSON', () => {
     const server = { tool: vi.fn() };
-    registerHubGetAnalyticsTool(server as never);
+    registerDesktopGetAnalyticsTool(server as never);
 
     const handler = server.tool.mock.calls[0]?.[3] as (p: {
       period: '7d' | '30d' | 'all';
@@ -342,13 +349,13 @@ describe('registerHubGetAnalyticsTool', () => {
     }) => { content: Array<{ type: string; text: string }> };
 
     const result = handler({ period: '30d' });
-    const data = JSON.parse(result.content[0]?.text ?? '{}') as { hub: unknown };
-    expect(data.hub).toBeDefined();
+    const data = JSON.parse(result.content[0]?.text ?? '{}') as { desktop: unknown };
+    expect(data.desktop).toBeDefined();
   });
 
   it('handler returns project analytics when projectId provided', () => {
     const server = { tool: vi.fn() };
-    registerHubGetAnalyticsTool(server as never);
+    registerDesktopGetAnalyticsTool(server as never);
 
     const handler = server.tool.mock.calls[0]?.[3] as (p: {
       period: '7d' | '30d' | 'all';

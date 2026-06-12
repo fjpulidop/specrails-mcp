@@ -1,13 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
-  openHubDb,
+  openDesktopDb,
   openProjectDb,
   queryProjects,
   queryProjectById,
   queryAnalytics,
   queryCostTimeline,
-} from '../hub/db.js';
+} from '../desktop/db.js';
 
 export type AnalyticsPeriod = '7d' | '30d' | 'all';
 
@@ -32,9 +32,9 @@ export interface ProjectAnalyticsResult {
   costTimeline: Array<{ date: string; costUsd: number; jobCount: number }>;
 }
 
-export interface HubAnalyticsResult {
+export interface DesktopAnalyticsResult {
   period: AnalyticsPeriod;
-  hub: {
+  desktop: {
     totalJobs: number;
     totalCostUsd: number;
     successRate: number;
@@ -52,14 +52,14 @@ export interface HubAnalyticsResult {
 
 export function getAnalytics(
   params: GetAnalyticsParams,
-): ProjectAnalyticsResult | HubAnalyticsResult {
+): ProjectAnalyticsResult | DesktopAnalyticsResult {
   const period: AnalyticsPeriod = params.period ?? '30d';
   const fromDate = periodToDate(period);
 
   if (params.projectId) {
     return getProjectAnalytics(params.projectId, period, fromDate);
   }
-  return getHubAnalytics(period, fromDate);
+  return getDesktopWideAnalytics(period, fromDate);
 }
 
 function getProjectAnalytics(
@@ -67,9 +67,9 @@ function getProjectAnalytics(
   period: AnalyticsPeriod,
   fromDate: string | null,
 ): ProjectAnalyticsResult {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   try {
-    const project = queryProjectById(hubDb, projectId);
+    const project = queryProjectById(desktopDb, projectId);
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
     }
@@ -106,19 +106,22 @@ function getProjectAnalytics(
       projectDb.close();
     }
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
-function getHubAnalytics(period: AnalyticsPeriod, fromDate: string | null): HubAnalyticsResult {
-  const hubDb = openHubDb();
+function getDesktopWideAnalytics(
+  period: AnalyticsPeriod,
+  fromDate: string | null,
+): DesktopAnalyticsResult {
+  const desktopDb = openDesktopDb();
   try {
-    const projects = queryProjects(hubDb);
+    const projects = queryProjects(desktopDb);
 
-    let hubTotalCost = 0;
-    let hubTotalJobs = 0;
-    let hubSuccessJobs = 0;
-    const byProject: HubAnalyticsResult['byProject'] = [];
+    let totalCostAcrossProjects = 0;
+    let totalJobsAcrossProjects = 0;
+    let successJobsAcrossProjects = 0;
+    const byProject: DesktopAnalyticsResult['byProject'] = [];
 
     for (const project of projects) {
       try {
@@ -126,9 +129,9 @@ function getHubAnalytics(period: AnalyticsPeriod, fromDate: string | null): HubA
         try {
           const kpi = queryAnalytics(projectDb, fromDate ?? undefined);
           if (kpi.total_jobs > 0) {
-            hubTotalCost += kpi.total_cost_usd;
-            hubTotalJobs += kpi.total_jobs;
-            hubSuccessJobs += Math.round(kpi.total_jobs * kpi.success_rate);
+            totalCostAcrossProjects += kpi.total_cost_usd;
+            totalJobsAcrossProjects += kpi.total_jobs;
+            successJobsAcrossProjects += Math.round(kpi.total_jobs * kpi.success_rate);
             byProject.push({
               projectId: project.id,
               projectName: project.name,
@@ -148,16 +151,17 @@ function getHubAnalytics(period: AnalyticsPeriod, fromDate: string | null): HubA
 
     return {
       period,
-      hub: {
-        totalJobs: hubTotalJobs,
-        totalCostUsd: hubTotalCost,
-        successRate: hubTotalJobs > 0 ? hubSuccessJobs / hubTotalJobs : 0,
+      desktop: {
+        totalJobs: totalJobsAcrossProjects,
+        totalCostUsd: totalCostAcrossProjects,
+        successRate:
+          totalJobsAcrossProjects > 0 ? successJobsAcrossProjects / totalJobsAcrossProjects : 0,
         projectsActive: byProject.length,
       },
       byProject,
     };
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
@@ -171,7 +175,7 @@ function periodToDate(period: AnalyticsPeriod): string | null {
 
 // ─── Registration ─────────────────────────────────────────────────────────────
 
-export function registerHubGetAnalyticsTool(server: McpServer): void {
+export function registerDesktopGetAnalyticsTool(server: McpServer): void {
   server.tool(
     'get_analytics',
     'Get analytics data — cost, job counts, success rates. Optionally scoped to a single project',
@@ -179,7 +183,7 @@ export function registerHubGetAnalyticsTool(server: McpServer): void {
       projectId: z
         .string()
         .optional()
-        .describe('Project ID to scope analytics. Omit for hub-wide aggregation'),
+        .describe('Project ID to scope analytics. Omit for aggregation across all projects'),
       period: z
         .enum(['7d', '30d', 'all'])
         .optional()
