@@ -1,25 +1,25 @@
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
-  openHubDb,
+  openDesktopDb,
   openProjectDb,
   queryProjects,
   queryProjectById,
   queryAnalytics,
-} from '../hub/db.js';
+} from '../desktop/db.js';
 
 // ─── Resource: list all projects ──────────────────────────────────────────────
 
 function listProjectsResource(): string {
-  const db = openHubDb();
+  const db = openDesktopDb();
   try {
     const projects = queryProjects(db);
 
     if (projects.length === 0) {
-      return 'No projects registered in specrails-hub.\n\nAdd a project with: specrails-hub add <path>';
+      return 'No projects registered in Specrails Desktop.\n\nAdd a project with: specrails-desktop add <path>';
     }
 
-    const lines: string[] = ['# specrails-hub Projects\n'];
+    const lines: string[] = ['# Specrails Desktop Projects\n'];
 
     for (const p of projects) {
       lines.push(`## ${p.name}`);
@@ -41,9 +41,9 @@ function listProjectsResource(): string {
 // ─── Resource: single project detail ─────────────────────────────────────────
 
 function getProjectResource(projectId: string): string {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   try {
-    const project = queryProjectById(hubDb, projectId);
+    const project = queryProjectById(desktopDb, projectId);
 
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
@@ -78,21 +78,21 @@ function getProjectResource(projectId: string): string {
 
     return lines.join('\n');
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
 // ─── Registration ─────────────────────────────────────────────────────────────
 
-export function registerHubProjectsResources(server: McpServer): void {
+export function registerDesktopProjectsResources(server: McpServer): void {
   server.resource(
-    'hub-projects',
-    'specrails://hub/projects',
-    { description: 'All projects registered in specrails-hub' },
+    'desktop-projects',
+    'specrails://desktop/projects',
+    { description: 'All projects registered in Specrails Desktop' },
     (_uri) => ({
       contents: [
         {
-          uri: 'specrails://hub/projects',
+          uri: 'specrails://desktop/projects',
           text: listProjectsResource(),
           mimeType: 'text/markdown',
         },
@@ -101,8 +101,8 @@ export function registerHubProjectsResources(server: McpServer): void {
   );
 
   server.resource(
-    'hub-project',
-    new ResourceTemplate('specrails://hub/projects/{projectId}', { list: undefined }),
+    'desktop-project',
+    new ResourceTemplate('specrails://desktop/projects/{projectId}', { list: undefined }),
     { description: 'Details and quick stats for a specific project' },
     (_uri, variables) => {
       const raw = variables['projectId'];
@@ -110,7 +110,7 @@ export function registerHubProjectsResources(server: McpServer): void {
       return {
         contents: [
           {
-            uri: `specrails://hub/projects/${projectId}`,
+            uri: `specrails://desktop/projects/${projectId}`,
             text: getProjectResource(projectId),
             mimeType: 'text/markdown',
           },

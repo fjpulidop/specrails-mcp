@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { openHubDb, queryProjectById, getHubApiBase } from '../hub/db.js';
+import { openDesktopDb, queryProjectById, getDesktopApiBase } from '../desktop/db.js';
 
 export interface EnqueueJobParams {
   projectId: string;
@@ -18,19 +18,19 @@ export interface EnqueueJobResult {
 }
 
 export async function enqueueJob(params: EnqueueJobParams): Promise<EnqueueJobResult> {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   let projectName = '';
   try {
-    const project = queryProjectById(hubDb, params.projectId);
+    const project = queryProjectById(desktopDb, params.projectId);
     if (!project) {
       throw new Error(`Project not found: ${params.projectId}`);
     }
     projectName = project.name;
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 
-  const apiBase = getHubApiBase();
+  const apiBase = getDesktopApiBase();
   const url = `${apiBase}/api/projects/${params.projectId}/queue`;
 
   const body: Record<string, unknown> = { command: params.command };
@@ -67,10 +67,10 @@ export async function enqueueJob(params: EnqueueJobParams): Promise<EnqueueJobRe
   };
 }
 
-export function registerHubEnqueueJobTool(server: McpServer): void {
+export function registerDesktopEnqueueJobTool(server: McpServer): void {
   server.tool(
     'enqueue_job',
-    'Enqueue a new AI job in a specrails project. The hub server must be running. Commands follow specrails-core conventions (e.g. "implement", "health-check", "product-backlog")',
+    'Enqueue a new AI job in a specrails project. The Specrails Desktop app must be running. Commands follow specrails-core conventions (e.g. "implement", "health-check", "product-backlog")',
     {
       projectId: z.string().describe('Project ID to run the job in'),
       command: z

@@ -63,6 +63,25 @@ That's it. The AI discovers available tools and resources automatically via MCP.
 
 ---
 
+## Breaking changes in v2
+
+v2 follows the rebrand of the desktop app from `specrails-hub` to **Specrails Desktop** (`specrails-desktop`). If you scripted against v1 tool or resource names, migrate as follows:
+
+| v1 (hub)                                            | v2 (desktop)                                            |
+| --------------------------------------------------- | ------------------------------------------------------- |
+| Tool `hub_status`                                   | Tool `desktop_status`                                   |
+| `get_analytics` output key `hub`                    | `get_analytics` output key `desktop`                    |
+| `specrails://hub/projects`                          | `specrails://desktop/projects`                          |
+| `specrails://hub/projects/{projectId}`              | `specrails://desktop/projects/{projectId}`              |
+| `specrails://hub/projects/{projectId}/jobs`         | `specrails://desktop/projects/{projectId}/jobs`         |
+| `specrails://hub/projects/{projectId}/jobs/{jobId}` | `specrails://desktop/projects/{projectId}/jobs/{jobId}` |
+| `specrails://hub/analytics`                         | `specrails://desktop/analytics`                         |
+| `specrails://hub/projects/{projectId}/analytics`    | `specrails://desktop/projects/{projectId}/analytics`    |
+
+All other tool names (`doctor`, `list_projects`, `get_project`, `get_jobs`, `get_job_detail`, `get_analytics`, `enqueue_job`) and project resource URIs are unchanged. v2 reads `~/.specrails/desktop.sqlite` and falls back to the legacy `~/.specrails/hub.sqlite` when a pre-rebrand desktop is still installed, so it works with both old and new desktop versions.
+
+---
+
 ## Tools
 
 Eight tools your AI assistant can call:
@@ -73,22 +92,22 @@ Eight tools your AI assistant can call:
 | ------------ | ---------------------------------------------------------------------------------------------------- |
 | **`doctor`** | Health check of your specrails installation. Verifies directories, config files, and provider setup. |
 
-### Hub — Query
+### Desktop — Query
 
-| Tool                 | Description                                                                                                                |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **`hub_status`**     | Is the hub server running? How many projects are registered?                                                               |
-| **`list_projects`**  | List all projects registered in specrails-hub.                                                                             |
-| **`get_project`**    | Get details for a specific project (path, provider, timestamps).                                                           |
-| **`get_jobs`**       | List jobs for a project. Filter by status (`running`, `success`, `failed`, `cancelled`). Supports pagination.              |
-| **`get_job_detail`** | Full detail for a specific job — phases, event log, tokens, cost, exit code.                                               |
-| **`get_analytics`**  | Cost, job counts, success rates, token usage. Scope to a project or get hub-wide aggregation. Periods: `7d`, `30d`, `all`. |
+| Tool                 | Description                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **`desktop_status`** | Is the Specrails Desktop server running? How many projects are registered?                                                        |
+| **`list_projects`**  | List all projects registered in Specrails Desktop.                                                                                |
+| **`get_project`**    | Get details for a specific project (path, provider, timestamps).                                                                  |
+| **`get_jobs`**       | List jobs for a project. Filter by status (`running`, `success`, `failed`, `cancelled`). Supports pagination.                     |
+| **`get_job_detail`** | Full detail for a specific job — phases, event log, tokens, cost, exit code.                                                      |
+| **`get_analytics`**  | Cost, job counts, success rates, token usage. Scope to a project or aggregate across all projects. Periods: `7d`, `30d`, `all`. |
 
-### Hub — Action
+### Desktop — Action
 
-| Tool              | Description                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------ |
-| **`enqueue_job`** | Queue a new AI job in a project. Requires the hub server to be running. Supports model override. |
+| Tool              | Description                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| **`enqueue_job`** | Queue a new AI job in a project. Requires the Specrails Desktop app to be running. Supports model override. |
 
 #### `enqueue_job` parameters
 
@@ -128,25 +147,25 @@ Read from the local project directory:
 | `specrails://skills/{name}`       | Skill definitions (`SKILL.md`)                                     |
 | `specrails://provider`            | Active CLI provider info (claude or codex)                         |
 
-### Hub resources (specrails-hub)
+### Desktop resources (Specrails Desktop)
 
 Read from the `~/.specrails` SQLite databases:
 
-| URI                                                 | Description                                         |
-| --------------------------------------------------- | --------------------------------------------------- |
-| `specrails://hub/projects`                          | All registered projects with metadata               |
-| `specrails://hub/projects/{projectId}`              | Single project detail with quick stats              |
-| `specrails://hub/projects/{projectId}/jobs`         | Recent jobs (last 50) with status, cost, duration   |
-| `specrails://hub/projects/{projectId}/jobs/{jobId}` | Full job detail with event log                      |
-| `specrails://hub/analytics`                         | Hub-wide analytics (last 30 days)                   |
-| `specrails://hub/projects/{projectId}/analytics`    | Project-specific analytics with daily cost timeline |
+| URI                                                     | Description                                         |
+| ------------------------------------------------------- | --------------------------------------------------- |
+| `specrails://desktop/projects`                          | All registered projects with metadata               |
+| `specrails://desktop/projects/{projectId}`              | Single project detail with quick stats              |
+| `specrails://desktop/projects/{projectId}/jobs`         | Recent jobs (last 50) with status, cost, duration   |
+| `specrails://desktop/projects/{projectId}/jobs/{jobId}` | Full job detail with event log                      |
+| `specrails://desktop/analytics`                         | App-wide analytics (last 30 days)                   |
+| `specrails://desktop/projects/{projectId}/analytics`    | Project-specific analytics with daily cost timeline |
 
 ---
 
 ## Typical workflow
 
 ```
-hub_status → list_projects → enqueue_job → get_jobs → get_job_detail
+desktop_status → list_projects → enqueue_job → get_jobs → get_job_detail
    ↓              ↓              ↓             ↓              ↓
 "Is it up?"  "What's there?"  "Launch it"  "How's it going?"  "What happened?"
 ```
@@ -155,7 +174,7 @@ hub_status → list_projects → enqueue_job → get_jobs → get_job_detail
 
 ```
 "Run the specrails doctor"        → doctor
-"Is the hub running?"             → hub_status
+"Is the desktop app running?"     → desktop_status
 ```
 
 ### Discover and inspect projects
@@ -200,14 +219,15 @@ hub_status → list_projects → enqueue_job → get_jobs → get_job_detail
 │   Codex CLI         │                │                          │
 │   ...               │                │   Tools (read + action)  │
 │                     │                │   ├── doctor             │
-└─────────────────────┘                │   ├── hub queries        │
-                                       │   └── enqueue_job → Hub  │
+└─────────────────────┘                │   ├── desktop queries    │
+                                       │   └── enqueue_job        │
+                                       │         → Desktop        │
                                        └──────────────────────────┘
 ```
 
 - **Transport**: stdio (JSON-RPC over stdin/stdout)
-- **Resources**: Read-only. Project files + hub SQLite databases.
-- **Tools**: Read queries are always safe. `enqueue_job` creates jobs via the hub HTTP API.
+- **Resources**: Read-only. Project files + Specrails Desktop SQLite databases.
+- **Tools**: Read queries are always safe. `enqueue_job` creates jobs via the Specrails Desktop HTTP API.
 - **Provider-aware**: Auto-detects Claude or Codex CLI and reads from the correct config directory.
 - **No filesystem writes**: All resource access is strictly read-only with path traversal prevention.
 
@@ -219,7 +239,7 @@ hub_status → list_projects → enqueue_job → get_jobs → get_job_detail
 | ------------------------ | ------------------------- | --------------------------------------- |
 | `SPECRAILS_PROJECT_ROOT` | Current working directory | Root directory of the specrails project |
 
-> Hub tools connect to `http://localhost:4200` (the default specrails-hub address).
+> Desktop tools connect to `http://localhost:4200` (the default Specrails Desktop address).
 
 ---
 
@@ -227,7 +247,7 @@ hub_status → list_projects → enqueue_job → get_jobs → get_job_detail
 
 - **Node.js** >= 20
 - **specrails-core** initialized in your project (`openspec/` directory)
-- **specrails-hub** running locally (required only for hub tools: `hub_status`, `enqueue_job`, etc.)
+- **Specrails Desktop** (`specrails-desktop`) running locally (required only for desktop tools: `desktop_status`, `enqueue_job`, etc.)
 
 ---
 

@@ -11,27 +11,35 @@ import type {
   JobDetailRow,
 } from './types.js';
 
-// ─── Hub paths ────────────────────────────────────────────────────────────────
+// ─── Desktop paths ────────────────────────────────────────────────────────────
 
-export function getHubDbPath(): string {
-  return path.join(os.homedir(), '.specrails', 'hub.sqlite');
+export function getDesktopDbPath(): string {
+  const specrailsDir = path.join(os.homedir(), '.specrails');
+  const desktopPath = path.join(specrailsDir, 'desktop.sqlite');
+  if (!fs.existsSync(desktopPath)) {
+    const legacyPath = path.join(specrailsDir, 'hub.sqlite'); // legacy pre-rebrand filename; desktop renames it on first launch
+    if (fs.existsSync(legacyPath)) {
+      return legacyPath;
+    }
+  }
+  return desktopPath;
 }
 
 export function getProjectDbPath(slug: string): string {
   return path.join(os.homedir(), '.specrails', 'projects', slug, 'jobs.sqlite');
 }
 
-export function getHubApiBase(): string {
+export function getDesktopApiBase(): string {
   return 'http://localhost:4200';
 }
 
 // ─── Connection helpers ───────────────────────────────────────────────────────
 
-export function openHubDb(): DatabaseType {
-  const dbPath = getHubDbPath();
+export function openDesktopDb(): DatabaseType {
+  const dbPath = getDesktopDbPath();
   if (!fs.existsSync(dbPath)) {
     throw new Error(
-      `Hub database not found at ${dbPath}. Is specrails-hub running or has it been started at least once?`,
+      `Specrails Desktop database not found at ${dbPath}. Is the Specrails Desktop app running or has it been started at least once?`,
     );
   }
   return new Database(dbPath, { readonly: true });
@@ -45,7 +53,7 @@ export function openProjectDb(slug: string): DatabaseType {
   return new Database(dbPath, { readonly: true });
 }
 
-// ─── Hub queries ──────────────────────────────────────────────────────────────
+// ─── Desktop registry queries ─────────────────────────────────────────────────
 
 export function queryProjects(db: DatabaseType): ProjectRow[] {
   return db

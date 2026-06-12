@@ -1,13 +1,19 @@
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { openHubDb, openProjectDb, queryProjectById, queryJobs, queryJobById } from '../hub/db.js';
+import {
+  openDesktopDb,
+  openProjectDb,
+  queryProjectById,
+  queryJobs,
+  queryJobById,
+} from '../desktop/db.js';
 
 // ─── Resource: jobs list for a project ───────────────────────────────────────
 
 function listJobsResource(projectId: string): string {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   try {
-    const project = queryProjectById(hubDb, projectId);
+    const project = queryProjectById(desktopDb, projectId);
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
     }
@@ -51,16 +57,16 @@ function listJobsResource(projectId: string): string {
       projectDb.close();
     }
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
 // ─── Resource: single job detail ─────────────────────────────────────────────
 
 function getJobResource(projectId: string, jobId: string): string {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   try {
-    const project = queryProjectById(hubDb, projectId);
+    const project = queryProjectById(desktopDb, projectId);
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
     }
@@ -132,7 +138,7 @@ function getJobResource(projectId: string, jobId: string): string {
       projectDb.close();
     }
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
@@ -155,10 +161,10 @@ function statusIcon(status: string): string {
 
 // ─── Registration ─────────────────────────────────────────────────────────────
 
-export function registerHubJobsResources(server: McpServer): void {
+export function registerDesktopJobsResources(server: McpServer): void {
   server.resource(
-    'hub-project-jobs',
-    new ResourceTemplate('specrails://hub/projects/{projectId}/jobs', { list: undefined }),
+    'desktop-project-jobs',
+    new ResourceTemplate('specrails://desktop/projects/{projectId}/jobs', { list: undefined }),
     { description: 'Recent jobs for a specific project (last 50)' },
     (_uri, variables) => {
       const raw = variables['projectId'];
@@ -166,7 +172,7 @@ export function registerHubJobsResources(server: McpServer): void {
       return {
         contents: [
           {
-            uri: `specrails://hub/projects/${projectId}/jobs`,
+            uri: `specrails://desktop/projects/${projectId}/jobs`,
             text: listJobsResource(projectId),
             mimeType: 'text/markdown',
           },
@@ -176,8 +182,10 @@ export function registerHubJobsResources(server: McpServer): void {
   );
 
   server.resource(
-    'hub-job',
-    new ResourceTemplate('specrails://hub/projects/{projectId}/jobs/{jobId}', { list: undefined }),
+    'desktop-job',
+    new ResourceTemplate('specrails://desktop/projects/{projectId}/jobs/{jobId}', {
+      list: undefined,
+    }),
     { description: 'Job detail with events and logs' },
     (_uri, variables) => {
       const rawProjectId = variables['projectId'];
@@ -189,7 +197,7 @@ export function registerHubJobsResources(server: McpServer): void {
       return {
         contents: [
           {
-            uri: `specrails://hub/projects/${projectId}/jobs/${jobId}`,
+            uri: `specrails://desktop/projects/${projectId}/jobs/${jobId}`,
             text: getJobResource(projectId, jobId),
             mimeType: 'text/markdown',
           },

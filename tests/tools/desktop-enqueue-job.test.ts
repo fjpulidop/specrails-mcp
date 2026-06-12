@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// ─── Mock hub/db.js ───────────────────────────────────────────────────────────
+// ─── Mock desktop/db.js ───────────────────────────────────────────────────────────
 
-const { mockOpenHubDb, mockQueryProjectById, mockGetHubApiBase } = vi.hoisted(() => ({
-  mockOpenHubDb: vi.fn(),
+const { mockOpenDesktopDb, mockQueryProjectById, mockGetDesktopApiBase } = vi.hoisted(() => ({
+  mockOpenDesktopDb: vi.fn(),
   mockQueryProjectById: vi.fn(),
-  mockGetHubApiBase: vi.fn(),
+  mockGetDesktopApiBase: vi.fn(),
 }));
 
-vi.mock('../../src/hub/db.js', () => ({
-  openHubDb: mockOpenHubDb,
+vi.mock('../../src/desktop/db.js', () => ({
+  openDesktopDb: mockOpenDesktopDb,
   queryProjectById: mockQueryProjectById,
-  getHubApiBase: mockGetHubApiBase,
+  getDesktopApiBase: mockGetDesktopApiBase,
 }));
 
 // ─── Mock global fetch ────────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ const mockFetch = vi.fn();
 
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 
-import { enqueueJob, registerHubEnqueueJobTool } from '../../src/tools/hub-enqueue-job.js';
+import { enqueueJob, registerDesktopEnqueueJobTool } from '../../src/tools/desktop-enqueue-job.js';
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -40,9 +40,9 @@ const mockProject = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockOpenHubDb.mockReturnValue(mockDb);
+  mockOpenDesktopDb.mockReturnValue(mockDb);
   mockQueryProjectById.mockReturnValue(mockProject);
-  mockGetHubApiBase.mockReturnValue('http://localhost:4200');
+  mockGetDesktopApiBase.mockReturnValue('http://localhost:4200');
 
   globalThis.fetch = mockFetch as typeof fetch;
   mockFetch.mockResolvedValue({
@@ -160,19 +160,19 @@ describe('enqueueJob', () => {
   });
 });
 
-// ─── registerHubEnqueueJobTool tests ─────────────────────────────────────────
+// ─── registerDesktopEnqueueJobTool tests ─────────────────────────────────────────
 
-describe('registerHubEnqueueJobTool', () => {
+describe('registerDesktopEnqueueJobTool', () => {
   it('registers enqueue_job tool', () => {
     const server = { tool: vi.fn() };
-    registerHubEnqueueJobTool(server as never);
+    registerDesktopEnqueueJobTool(server as never);
     expect(server.tool).toHaveBeenCalledOnce();
     expect(server.tool.mock.calls[0]?.[0]).toBe('enqueue_job');
   });
 
   it('handler enqueues job and returns JSON content', async () => {
     const server = { tool: vi.fn() };
-    registerHubEnqueueJobTool(server as never);
+    registerDesktopEnqueueJobTool(server as never);
 
     const handler = server.tool.mock.calls[0]?.[3] as (params: {
       projectId: string;
@@ -189,7 +189,7 @@ describe('registerHubEnqueueJobTool', () => {
 
   it('handler passes model when provided', async () => {
     const server = { tool: vi.fn() };
-    registerHubEnqueueJobTool(server as never);
+    registerDesktopEnqueueJobTool(server as never);
 
     const handler = server.tool.mock.calls[0]?.[3] as (params: {
       projectId: string;

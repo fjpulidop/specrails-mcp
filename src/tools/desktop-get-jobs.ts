@@ -1,7 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { openHubDb, openProjectDb, queryProjectById, queryJobs, queryJobById } from '../hub/db.js';
-import type { JobRow, JobDetailRow } from '../hub/types.js';
+import {
+  openDesktopDb,
+  openProjectDb,
+  queryProjectById,
+  queryJobs,
+  queryJobById,
+} from '../desktop/db.js';
+import type { JobRow, JobDetailRow } from '../desktop/types.js';
 
 export interface GetJobsParams {
   projectId: string;
@@ -20,9 +26,9 @@ export interface GetJobsResult {
 }
 
 export function getJobs(params: GetJobsParams): GetJobsResult {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   try {
-    const project = queryProjectById(hubDb, params.projectId);
+    const project = queryProjectById(desktopDb, params.projectId);
     if (!project) {
       throw new Error(`Project not found: ${params.projectId}`);
     }
@@ -47,7 +53,7 @@ export function getJobs(params: GetJobsParams): GetJobsResult {
       projectDb.close();
     }
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
@@ -63,9 +69,9 @@ export interface GetJobDetailResult {
 }
 
 export function getJobDetail(params: GetJobDetailParams): GetJobDetailResult {
-  const hubDb = openHubDb();
+  const desktopDb = openDesktopDb();
   try {
-    const project = queryProjectById(hubDb, params.projectId);
+    const project = queryProjectById(desktopDb, params.projectId);
     if (!project) {
       throw new Error(`Project not found: ${params.projectId}`);
     }
@@ -86,11 +92,11 @@ export function getJobDetail(params: GetJobDetailParams): GetJobDetailResult {
       projectDb.close();
     }
   } finally {
-    hubDb.close();
+    desktopDb.close();
   }
 }
 
-export function registerHubGetJobsTool(server: McpServer): void {
+export function registerDesktopGetJobsTool(server: McpServer): void {
   server.tool(
     'get_jobs',
     'Get jobs for a specific project with optional status filtering and pagination',

@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 
 export type DatabaseType = InstanceType<typeof Database>;
 
-// ─── Hub types ────────────────────────────────────────────────────────────────
+// ─── Desktop registry types ───────────────────────────────────────────────────
 
 export interface ProjectRow {
   id: string;

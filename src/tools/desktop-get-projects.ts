@@ -1,14 +1,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { openHubDb, queryProjects, queryProjectById } from '../hub/db.js';
-import type { ProjectRow } from '../hub/types.js';
+import { openDesktopDb, queryProjects, queryProjectById } from '../desktop/db.js';
+import type { ProjectRow } from '../desktop/types.js';
 
 export interface GetProjectsResult {
   projects: Array<Omit<ProjectRow, never>>;
 }
 
 export function getProjects(): GetProjectsResult {
-  const db = openHubDb();
+  const db = openDesktopDb();
   try {
     return { projects: queryProjects(db) };
   } finally {
@@ -17,7 +17,7 @@ export function getProjects(): GetProjectsResult {
 }
 
 export function getProject(projectId: string): ProjectRow {
-  const db = openHubDb();
+  const db = openDesktopDb();
   try {
     const project = queryProjectById(db, projectId);
     if (!project) {
@@ -29,8 +29,8 @@ export function getProject(projectId: string): ProjectRow {
   }
 }
 
-export function registerHubGetProjectsTool(server: McpServer): void {
-  server.tool('list_projects', 'List all projects registered in specrails-hub', {}, () => {
+export function registerDesktopGetProjectsTool(server: McpServer): void {
+  server.tool('list_projects', 'List all projects registered in Specrails Desktop', {}, () => {
     const result = getProjects();
     return {
       content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],

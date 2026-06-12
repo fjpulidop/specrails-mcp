@@ -2,10 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { openHubDb, queryProjects, getHubApiBase } from '../hub/db.js';
+import { openDesktopDb, queryProjects, getDesktopApiBase } from '../desktop/db.js';
 
-export interface HubStatusResult {
-  hubDbExists: boolean;
+export interface DesktopStatusResult {
+  desktopDbExists: boolean;
   projectCount: number;
   serverReachable: boolean;
   serverUrl: string;
@@ -13,20 +13,20 @@ export interface HubStatusResult {
   pid: number | null;
 }
 
-export async function getHubStatus(): Promise<HubStatusResult> {
+export async function getDesktopStatus(): Promise<DesktopStatusResult> {
   const pidPath = path.join(os.homedir(), '.specrails', 'manager.pid');
-  const serverUrl = getHubApiBase();
+  const serverUrl = getDesktopApiBase();
 
-  let hubDbExists = false;
+  let desktopDbExists = false;
   let projectCount = 0;
   try {
-    const db = openHubDb();
-    hubDbExists = true;
+    const db = openDesktopDb();
+    desktopDbExists = true;
     const projects = queryProjects(db);
     projectCount = projects.length;
     db.close();
   } catch {
-    hubDbExists = false;
+    desktopDbExists = false;
   }
 
   let pidFileExists = false;
@@ -42,16 +42,24 @@ export async function getHubStatus(): Promise<HubStatusResult> {
 
   let serverReachable = false;
   try {
-    const response = await fetch(`${serverUrl}/api/hub/state`, {
+    // GET /api/state is auth-protected on the desktop server (Bearer or
+    // X-Desktop-Token header), so this unauthenticated probe gets a 401 from a
+    // running server — and a pre-rebrand desktop (which only served
+    // /api/hub/state) answers 404. Either way, ANY HTTP response proves a
+    // server is listening on the port, so a resolved fetch counts as
+    // reachable; only a network-level failure (connection refused, timeout)
+    // counts as down. This also makes a separate legacy /api/hub/state probe
+    // unnecessary.
+    await fetch(`${serverUrl}/api/state`, {
       signal: AbortSignal.timeout(3_000),
     });
-    serverReachable = response.ok;
+    serverReachable = true;
   } catch {
     serverReachable = false;
   }
 
   return {
-    hubDbExists,
+    desktopDbExists,
     projectCount,
     serverReachable,
     serverUrl,
@@ -60,15 +68,15 @@ export async function getHubStatus(): Promise<HubStatusResult> {
   };
 }
 
-export function registerHubStatusTool(server: McpServer): void {
+export function registerDesktopStatusTool(server: McpServer): void {
   server.tool(
-    'hub_status',
-    'Check if specrails-hub server is running, how many projects are registered, and overall health',
+    'desktop_status',
+    'Check if the Specrails Desktop server is running, how many projects are registered, and overall health',
     {},
     async () => {
-      const status = await getHubStatus();
-      const lines: string[] = ['## specrails-hub Status\n'];
-      lines.push(`- **Hub DB**: ${status.hubDbExists ? '✅ exists' : '❌ not found'}`);
+      const status = await getDesktopStatus();
+      const lines: string[] = ['## Specrails Desktop Status\n'];
+      lines.push(`- **Desktop DB**: ${status.desktopDbExists ? '✅ exists' : '❌ not found'}`);
       lines.push(`- **Projects**: ${status.projectCount}`);
       lines.push(
         `- **Server**: ${status.serverReachable ? `✅ reachable at ${status.serverUrl}` : `❌ not reachable at ${status.serverUrl}`}`,

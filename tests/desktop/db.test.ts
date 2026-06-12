@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import type { DatabaseType } from '../../src/hub/types.js';
+import type { DatabaseType } from '../../src/desktop/types.js';
 import {
   queryProjects,
   queryProjectById,
@@ -9,11 +9,11 @@ import {
   queryJobById,
   queryAnalytics,
   queryCostTimeline,
-} from '../../src/hub/db.js';
+} from '../../src/desktop/db.js';
 
 // ─── In-memory DB helpers ─────────────────────────────────────────────────────
 
-function createHubDb(): DatabaseType {
+function createDesktopDb(): DatabaseType {
   const db = new Database(':memory:');
   db.exec(`
     CREATE TABLE projects (
@@ -73,17 +73,17 @@ function createProjectDb(): DatabaseType {
   return db;
 }
 
-// ─── Hub DB tests ─────────────────────────────────────────────────────────────
+// ─── Desktop registry DB tests ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 describe('queryProjects', () => {
   it('returns empty array when no projects', () => {
-    const db = createHubDb();
+    const db = createDesktopDb();
     expect(queryProjects(db)).toEqual([]);
     db.close();
   });
 
   it('returns all projects ordered by last_seen_at desc', () => {
-    const db = createHubDb();
+    const db = createDesktopDb();
     db.prepare(
       `
       INSERT INTO projects (id, slug, name, path, db_path, provider, added_at, last_seen_at) VALUES
@@ -102,13 +102,13 @@ describe('queryProjects', () => {
 
 describe('queryProjectById', () => {
   it('returns null for unknown id', () => {
-    const db = createHubDb();
+    const db = createDesktopDb();
     expect(queryProjectById(db, 'unknown')).toBeNull();
     db.close();
   });
 
   it('returns project when found', () => {
-    const db = createHubDb();
+    const db = createDesktopDb();
     db.prepare(
       `
       INSERT INTO projects (id, slug, name, path, db_path, provider) VALUES
@@ -126,13 +126,13 @@ describe('queryProjectById', () => {
 
 describe('queryProjectBySlug', () => {
   it('returns null for unknown slug', () => {
-    const db = createHubDb();
+    const db = createDesktopDb();
     expect(queryProjectBySlug(db, 'nope')).toBeNull();
     db.close();
   });
 
   it('returns project when slug matches', () => {
-    const db = createHubDb();
+    const db = createDesktopDb();
     db.prepare(
       `
       INSERT INTO projects (id, slug, name, path, db_path, provider) VALUES
